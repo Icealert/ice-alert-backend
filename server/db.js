@@ -6,8 +6,24 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
 console.log('Initializing Supabase connection...');
-console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Not set');
-console.log('Supabase Key:', supabaseKey ? 'Set' : 'Not set');
+// Log the full URL but mask the middle part for security
+const maskedUrl = supabaseUrl ? `${supabaseUrl.slice(0, 15)}...${supabaseUrl.slice(-10)}` : 'Not set';
+console.log('Supabase URL:', maskedUrl);
+console.log('Supabase Key:', supabaseKey ? 'Set (length: ' + supabaseKey.length + ')' : 'Not set');
+
+// Validate URL format
+if (supabaseUrl) {
+  try {
+    const url = new URL(supabaseUrl);
+    console.log('URL validation passed:');
+    console.log('- Protocol:', url.protocol);
+    console.log('- Host:', url.host);
+    console.log('- Pathname:', url.pathname);
+  } catch (error) {
+    console.error('Invalid Supabase URL format:', error.message);
+    throw new Error('Invalid Supabase URL format');
+  }
+}
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase credentials:',
@@ -28,17 +44,32 @@ const options = {
   }
 };
 
+console.log('Creating Supabase client with options:', JSON.stringify(options, null, 2));
 const supabase = createClient(supabaseUrl, supabaseKey, options);
 console.log('Supabase client created successfully');
 
 // Test the connection
 async function testConnection() {
   try {
+    console.log('Testing Supabase connection...');
     const { data, error } = await supabase.from('devices').select('count');
-    if (error) throw error;
-    console.log('Supabase connection test successful');
+    if (error) {
+      console.error('Supabase query error:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error;
+    }
+    console.log('Supabase connection test successful:', data);
   } catch (error) {
-    console.error('Supabase connection test failed:', error);
+    console.error('Supabase connection test failed:', {
+      name: error.name,
+      message: error.message,
+      cause: error.cause,
+      stack: error.stack
+    });
   }
 }
 

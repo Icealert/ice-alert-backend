@@ -288,9 +288,22 @@ async function createAlert(deviceId, type, value, threshold) {
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log('Environment variables:');
-  console.log('- SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set' : 'Not set');
-  console.log('- SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'Set' : 'Not set');
-  console.log('- CORS_ORIGIN:', process.env.CORS_ORIGIN);
+  console.log('Full environment configuration:');
   console.log('- NODE_ENV:', process.env.NODE_ENV);
+  console.log('- PORT:', process.env.PORT);
+  console.log('- CORS_ORIGIN:', process.env.CORS_ORIGIN);
+  
+  // Log Supabase config (masked)
+  const maskedUrl = process.env.SUPABASE_URL 
+    ? `${process.env.SUPABASE_URL.slice(0, 15)}...${process.env.SUPABASE_URL.slice(-10)}`
+    : 'Not set';
+  console.log('- SUPABASE_URL:', maskedUrl);
+  console.log('- SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? `Set (length: ${process.env.SUPABASE_ANON_KEY.length})` : 'Not set');
+  
+  // Log server configuration
+  console.log('\nServer configuration:');
+  console.log('- Host:', '0.0.0.0');
+  console.log('- Port:', PORT);
+  console.log('- CORS enabled:', true);
+  console.log('- CORS origin:', process.env.NODE_ENV === 'production' ? process.env.CORS_ORIGIN : '*');
 }); 
