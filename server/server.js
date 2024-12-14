@@ -20,46 +20,72 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Add this after the health check endpoint
+// Debug schema endpoint
 app.get('/debug/schema', async (req, res) => {
   try {
     console.log('Checking database schema...');
     
-    // Check if tables exist
-    const { data: tables, error: tablesError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public');
+    // List of tables we want to check
+    const tables = [
+      'devices',
+      'readings',
+      'alert_settings',
+      'alert_recipients',
+      'alert_history',
+      'combination_alerts'
+    ];
 
-    if (tablesError) {
-      console.error('Error fetching tables:', tablesError);
-      throw tablesError;
+    const schema = {};
+    
+    // Check each table
+    for (const tableName of tables) {
+      try {
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('*')
+          .limit(1);
+
+        if (error) {
+          schema[tableName] = { exists: false, error: error.message };
+        } else {
+          schema[tableName] = {
+            exists: true,
+            sample: data,
+            columns: data && data[0] ? Object.keys(data[0]) : []
+          };
+        }
+      } catch (error) {
+        schema[tableName] = { exists: false, error: error.message };
+      }
     }
 
-    // Get table info
-    const schema = {};
-    for (const table of tables) {
-      const { data: columns, error: columnsError } = await supabase
-        .from('information_schema.columns')
-        .select('column_name, data_type')
-        .eq('table_name', table.table_name)
-        .eq('table_schema', 'public');
+    // Check views
+    try {
+      const { data: latestReadings, error: lrError } = await supabase
+        .from('latest_readings')
+        .select('*')
+        .limit(1);
 
-      if (columnsError) {
-        console.error(`Error fetching columns for ${table.table_name}:`, columnsError);
-        continue;
-      }
-
-      schema[table.table_name] = columns;
+      schema['latest_readings'] = {
+        exists: !lrError,
+        sample: latestReadings,
+        columns: latestReadings && latestReadings[0] ? Object.keys(latestReadings[0]) : []
+      };
+    } catch (error) {
+      schema['latest_readings'] = { exists: false, error: error.message };
     }
 
     res.json({
-      tables: tables.map(t => t.table_name),
+      status: 'ok',
+      timestamp: new Date().toISOString(),
       schema
     });
   } catch (error) {
     console.error('Schema check error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
