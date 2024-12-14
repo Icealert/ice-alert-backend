@@ -5,12 +5,11 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
+// Configure CORS to accept requests from deployed frontend
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CORS_ORIGIN 
-    : '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: ['https://aaaa-arduino-proj.vercel.app', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 app.use(express.json());
