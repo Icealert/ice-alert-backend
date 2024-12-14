@@ -7,7 +7,9 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app',
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.CORS_ORIGIN 
+    : '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
@@ -18,9 +20,57 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Add this after the health check endpoint
+app.get('/debug/schema', async (req, res) => {
+  try {
+    console.log('Checking database schema...');
+    
+    // Check if tables exist
+    const { data: tables, error: tablesError } = await supabase
+      .from('information_schema.tables')
+      .select('table_name')
+      .eq('table_schema', 'public');
+
+    if (tablesError) {
+      console.error('Error fetching tables:', tablesError);
+      throw tablesError;
+    }
+
+    // Get table info
+    const schema = {};
+    for (const table of tables) {
+      const { data: columns, error: columnsError } = await supabase
+        .from('information_schema.columns')
+        .select('column_name, data_type')
+        .eq('table_name', table.table_name)
+        .eq('table_schema', 'public');
+
+      if (columnsError) {
+        console.error(`Error fetching columns for ${table.table_name}:`, columnsError);
+        continue;
+      }
+
+      schema[table.table_name] = columns;
+    }
+
+    res.json({
+      tables: tables.map(t => t.table_name),
+      schema
+    });
+  } catch (error) {
+    console.error('Schema check error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Device endpoints
 app.get('/api/devices', async (req, res) => {
   try {
+    console.log('Fetching devices... Environment check:');
+    console.log('SUPABASE_URL exists:', !!process.env.SUPABASE_URL);
+    console.log('SUPABASE_ANON_KEY exists:', !!process.env.SUPABASE_ANON_KEY);
+    console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
+    
     const { data, error } = await supabase
       .from('devices')
       .select(`
@@ -33,10 +83,21 @@ app.get('/api/devices', async (req, res) => {
         )
       `);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error details:', error);
+      throw error;
+    }
+    console.log('Devices fetched successfully:', data?.length || 0, 'devices');
     res.json(data);
   } catch (error) {
     console.error('Error fetching devices:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      details: error.details
+    });
     res.status(500).json({ error: error.message });
   }
 });
@@ -224,7 +285,12 @@ async function createAlert(deviceId, type, value, threshold) {
   }
 }
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('Environment variables:');
+  console.log('- SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set' : 'Not set');
+  console.log('- SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'Set' : 'Not set');
+  console.log('- CORS_ORIGIN:', process.env.CORS_ORIGIN);
+  console.log('- NODE_ENV:', process.env.NODE_ENV);
 }); 
