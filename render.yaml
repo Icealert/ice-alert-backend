@@ -13,7 +13,7 @@ services:
       - key: SUPABASE_ANON_KEY
         value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2c3plZnN2Z2p3eWUiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTcxMDY5NzE5OCwiZXhwIjoyMDI2MjczMTk4fQ.Wd-GYHQPXMxWvBWXPqPgPBJvKEeqwdXMWKB_LB8qBkE
       - key: CORS_ORIGIN
-        value: https://aaaa-arduino-proj.vercel.app
+        value: https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app
       - key: EMAIL_USER
         value: icealertdevice@gmail.com
       - key: EMAIL_PASSWORD
