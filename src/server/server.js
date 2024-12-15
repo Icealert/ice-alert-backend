@@ -6,30 +6,46 @@ const { supabase } = require('./supabase');
 const app = express();
 
 // Configure CORS
-const corsOptions = {
-  origin: [
-    'https://ice-alert-frontend1.vercel.app',
-    'https://ice-alert-frontend1-git-main-icealerts-projects.vercel.app',
-    'http://localhost:3000'
-  ],
+const allowedOrigins = [
+  'https://ice-alert-frontend1.vercel.app',
+  'https://ice-alert-frontend1-git-main-icealerts-projects.vercel.app',
+  'https://ice-alert-frontend1-oa3nfa92u-icealerts-projects.vercel.app',
+  'http://localhost:3000'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow all vercel.app subdomains
+    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
-  credentials: true,
-  optionsSuccessStatus: 200
-};
+  optionsSuccessStatus: 200,
+  maxAge: 86400 // Cache preflight request for 24 hours
+}));
 
-app.use(cors(corsOptions));
 app.use(express.json());
 
 // Add headers middleware for preflight requests
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (corsOptions.origin.includes(origin)) {
+  
+  // Allow all vercel.app subdomains or specific allowed origins
+  if (origin && (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin))) {
     res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Max-Age', '86400');
   }
-  res.header('Access-Control-Allow-Credentials', true);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

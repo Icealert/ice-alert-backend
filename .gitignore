@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+/node_modules
 /.pnp
 .pnp.js
 
@@ -40,8 +40,3 @@ Thumbs.db
 
 # Vercel
 .vercel/
-
-# Arduino build files
-arduino-proj/build/
-device-dashboard/build/
-flask-backend/__pycache__/

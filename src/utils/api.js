@@ -5,8 +5,10 @@ import API_BASE_URL from '../api/config';
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  withCredentials: true
 });
 
 // Add request interceptor for debugging

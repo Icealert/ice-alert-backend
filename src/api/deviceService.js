@@ -4,7 +4,11 @@ import API_BASE_URL, { API_CONFIG } from './config';
 // Create axios instance with default config
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  ...API_CONFIG
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
 });
 
 // Add request interceptor for debugging
@@ -51,7 +55,7 @@ api.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 400:
-          errorMessage = 'Invalid request. Please check your input.';
+          errorMessage = error.response.data?.error || 'Invalid request. Please check your input.';
           break;
         case 401:
           errorMessage = 'Unauthorized. Please log in again.';
@@ -60,10 +64,10 @@ api.interceptors.response.use(
           errorMessage = 'Access denied. You do not have permission.';
           break;
         case 404:
-          errorMessage = 'Resource not found.';
+          errorMessage = `Resource not found: ${error.config?.url}`;
           break;
         case 500:
-          errorMessage = 'Server error. Please try again later.';
+          errorMessage = error.response.data?.error || 'Server error. Please try again later.';
           break;
         default:
           errorMessage = error.response.data?.error || error.message;
@@ -96,21 +100,20 @@ export const deviceService = {
         origin: window.location.origin
       });
       
-      // Try to find device by UUID first, then by ice_alert_serial
-      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}`);
-      
-      // Log success
-      console.log('Device fetch successful:', {
-        deviceId,
-        status: response.status,
-        hasData: !!response.data,
-        dataType: response.data ? typeof response.data : null,
-        timestamp: new Date().toISOString()
-      });
-      
-      return response.data;
+      // Try to find device by UUID first
+      try {
+        const response = await api.get(`/devices/${encodeURIComponent(deviceId)}`);
+        return response.data;
+      } catch (error) {
+        if (error.response?.status === 404) {
+          // If not found by UUID, try by ice_alert_serial
+          console.log('Device not found by UUID, trying ice_alert_serial');
+          const serialResponse = await api.get(`/devices/by-serial/${encodeURIComponent(deviceId)}`);
+          return serialResponse.data;
+        }
+        throw error;
+      }
     } catch (error) {
-      // Log detailed error information
       console.error('Failed to fetch device:', {
         deviceId,
         error: {
@@ -127,18 +130,6 @@ export const deviceService = {
         },
         timestamp: new Date().toISOString()
       });
-
-      // If the error is 404, try searching by ice_alert_serial
-      if (error.response?.status === 404) {
-        try {
-          const response = await api.get(`/devices/by-serial/${encodeURIComponent(deviceId)}`);
-          return response.data;
-        } catch (serialError) {
-          console.error('Failed to fetch device by serial:', serialError);
-          throw serialError;
-        }
-      }
-
       throw error;
     }
   },
@@ -166,53 +157,22 @@ export const deviceService = {
       
       // Validate settings object
       if (!settings || typeof settings !== 'object') {
-        const error = new Error('Invalid settings object');
-        console.error('Settings validation failed:', {
-          deviceId,
-          error: error.message,
-          receivedType: typeof settings,
-          timestamp: new Date().toISOString()
-        });
-        throw error;
+        throw new Error('Invalid settings object');
       }
 
       // Ensure required fields exist
       const requiredFields = ['enabled', 'conditions'];
       for (const field of requiredFields) {
         if (!(field in settings)) {
-          const error = new Error(`Missing required field: ${field}`);
-          console.error('Settings validation failed:', {
-            deviceId,
-            error: error.message,
-            missingField: field,
-            receivedFields: Object.keys(settings),
-            timestamp: new Date().toISOString()
-          });
-          throw error;
+          throw new Error(`Missing required field: ${field}`);
         }
       }
 
-      // Make API request with explicit CORS headers
-      const response = await api.put(`/devices/${encodeURIComponent(deviceId)}/alerts`, settings, {
-        headers: {
-          ...API_CONFIG.headers,
-          'Origin': window.location.origin
-        }
-      });
+      // Make API request
+      const response = await api.put(`/devices/${encodeURIComponent(deviceId)}/alerts`, settings);
       
-      // Validate response
       if (!response.data) {
-        const error = new Error('No data received from server');
-        console.error('Settings update failed:', {
-          deviceId,
-          error: error.message,
-          response: {
-            status: response.status,
-            headers: response.headers
-          },
-          timestamp: new Date().toISOString()
-        });
-        throw error;
+        throw new Error('No data received from server');
       }
 
       console.log('Alert settings updated successfully:', {
@@ -240,7 +200,7 @@ export const deviceService = {
         },
         timestamp: new Date().toISOString()
       });
-      throw error;
+      throw new Error('Failed to save settings. Please try again.');
     }
   },
 

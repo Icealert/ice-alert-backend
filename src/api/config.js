@@ -33,8 +33,7 @@ export const API_CONFIG = {
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'Origin': typeof window !== 'undefined' ? window.location.origin : 'unknown'
+    'Accept': 'application/json'
   }
 };
 
