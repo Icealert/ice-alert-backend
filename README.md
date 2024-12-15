@@ -38,4 +38,22 @@ VITE_API_URL=your_backend_url
 
 ## Deployment
 
-The application is automatically deployed to Vercel when changes are pushed to the main branch. 
+The application is automatically deployed when changes are pushed to the main branch:
+
+- Frontend (Vercel): Automatically deploys via GitHub integration
+- Backend (Render): Automatically deploys via GitHub integration
+
+### Manual Deployment
+
+You can trigger deployments manually using the deploy hooks:
+
+- Frontend (Vercel):
+```bash
+curl -X POST https://api.vercel.com/v1/integrations/deploy/prj_nYMQ56pMnhe5Jjqk5SJ1gwg3zqqt/XSiRJUcB39
+```
+
+- Backend (Render):
+```bash
+curl -X POST https://api.render.com/deploy/srv-ctemqopu0jms739dmjq0?key=C97EUaWtUaQ
+```
+  
