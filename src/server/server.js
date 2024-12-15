@@ -162,6 +162,100 @@ app.post('/api/alerts/check/:deviceId', async (req, res) => {
   }
 });
 
+app.get('/api/devices/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('Device lookup request:', {
+      id,
+      headers: req.headers,
+      origin: req.headers.origin,
+      method: req.method,
+      path: req.path
+    });
+    
+    // Try to find device by UUID first
+    console.log('Attempting UUID lookup...');
+    let { data, error } = await supabase
+      .from('devices')
+      .select(`
+        *,
+        latest_readings (
+          temperature,
+          humidity,
+          flow_rate,
+          timestamp
+        ),
+        alert_settings (*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (!data) {
+      console.log('UUID lookup failed, trying ice_alert_serial...');
+      ({ data, error } = await supabase
+        .from('devices')
+        .select(`
+          *,
+          latest_readings (
+            temperature,
+            humidity,
+            flow_rate,
+            timestamp
+          ),
+          alert_settings (*)
+        `)
+        .eq('ice_alert_serial', id)
+        .single());
+    }
+
+    if (error) {
+      console.error('Supabase query error:', {
+        error,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error;
+    }
+    
+    if (!data) {
+      console.log('Device not found with either UUID or ice_alert_serial:', id);
+      return res.status(404).json({ 
+        error: 'Device not found',
+        details: {
+          searchId: id,
+          attempts: ['UUID', 'ice_alert_serial']
+        }
+      });
+    }
+    
+    console.log('Device found:', {
+      id: data.id,
+      name: data.name,
+      ice_alert_serial: data.ice_alert_serial,
+      has_readings: !!data.latest_readings,
+      has_settings: !!data.alert_settings
+    });
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching device:', {
+      error,
+      stack: error.stack,
+      id: req.params.id,
+      headers: req.headers
+    });
+    res.status(500).json({ 
+      error: error.message,
+      details: {
+        code: error.code,
+        hint: error.hint
+      }
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

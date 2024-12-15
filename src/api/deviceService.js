@@ -90,11 +90,39 @@ export const deviceService = {
   // Fetch device details
   async getDevice(deviceId) {
     try {
-      console.log('Fetching device:', deviceId);
-      const response = await api.get(`/devices/${deviceId}`);
+      console.log('Fetching device:', {
+        deviceId,
+        timestamp: new Date().toISOString(),
+        origin: window.location.origin
+      });
+      
+      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}`);
+      console.log('Device fetch successful:', {
+        deviceId,
+        status: response.status,
+        hasData: !!response.data,
+        dataType: response.data ? typeof response.data : null,
+        timestamp: new Date().toISOString()
+      });
+      
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch device:', error);
+      console.error('Failed to fetch device:', {
+        deviceId,
+        error: {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          stack: error.stack
+        },
+        request: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          baseURL: error.config?.baseURL
+        },
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   },
@@ -114,23 +142,42 @@ export const deviceService = {
   // Update alert settings
   async updateAlertSettings(deviceId, settings) {
     try {
-      console.log('Updating alert settings for device:', deviceId, settings);
+      console.log('Updating alert settings:', {
+        deviceId,
+        settings,
+        timestamp: new Date().toISOString()
+      });
       
       // Validate settings object
       if (!settings || typeof settings !== 'object') {
-        throw new Error('Invalid settings object');
+        const error = new Error('Invalid settings object');
+        console.error('Settings validation failed:', {
+          deviceId,
+          error: error.message,
+          receivedType: typeof settings,
+          timestamp: new Date().toISOString()
+        });
+        throw error;
       }
 
       // Ensure required fields exist
       const requiredFields = ['enabled', 'conditions'];
       for (const field of requiredFields) {
         if (!(field in settings)) {
-          throw new Error(`Missing required field: ${field}`);
+          const error = new Error(`Missing required field: ${field}`);
+          console.error('Settings validation failed:', {
+            deviceId,
+            error: error.message,
+            missingField: field,
+            receivedFields: Object.keys(settings),
+            timestamp: new Date().toISOString()
+          });
+          throw error;
         }
       }
 
       // Make API request with explicit CORS headers
-      const response = await api.put(`/devices/${deviceId}/alerts`, settings, {
+      const response = await api.put(`/devices/${encodeURIComponent(deviceId)}/alerts`, settings, {
         headers: {
           ...API_CONFIG.headers,
           'Origin': window.location.origin
@@ -139,13 +186,44 @@ export const deviceService = {
       
       // Validate response
       if (!response.data) {
-        throw new Error('No data received from server');
+        const error = new Error('No data received from server');
+        console.error('Settings update failed:', {
+          deviceId,
+          error: error.message,
+          response: {
+            status: response.status,
+            headers: response.headers
+          },
+          timestamp: new Date().toISOString()
+        });
+        throw error;
       }
 
-      console.log('Alert settings updated successfully:', response.data);
+      console.log('Alert settings updated successfully:', {
+        deviceId,
+        status: response.status,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      });
+      
       return response.data;
     } catch (error) {
-      console.error('Failed to update alert settings:', error);
+      console.error('Failed to update alert settings:', {
+        deviceId,
+        error: {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          stack: error.stack
+        },
+        request: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          baseURL: error.config?.baseURL
+        },
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   },
@@ -154,7 +232,7 @@ export const deviceService = {
   async getAlertSettings(deviceId) {
     try {
       console.log('Fetching alert settings for device:', deviceId);
-      const response = await api.get(`/devices/${deviceId}/alerts`);
+      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/alerts`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch alert settings:', error);
@@ -166,7 +244,7 @@ export const deviceService = {
   async getAlertHistory(deviceId, days = 7) {
     try {
       console.log('Fetching alert history for device:', deviceId, 'days:', days);
-      const response = await api.get(`/devices/${deviceId}/alert-history?days=${days}`);
+      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/alert-history?days=${days}`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch alert history:', error);
