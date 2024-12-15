@@ -70,11 +70,49 @@ export const deviceService = {
   async updateAlertSettings(deviceId, settings) {
     try {
       console.log('Updating alert settings for device:', deviceId, settings);
+      
+      // Validate settings object
+      if (!settings || typeof settings !== 'object') {
+        throw new Error('Invalid settings object');
+      }
+
+      // Ensure required fields exist
+      const requiredFields = ['enabled', 'conditions'];
+      for (const field of requiredFields) {
+        if (!(field in settings)) {
+          throw new Error(`Missing required field: ${field}`);
+        }
+      }
+
+      // Validate conditions
+      const metrics = ['temperature', 'humidity', 'flowRate'];
+      for (const metric of metrics) {
+        if (settings.conditions[metric]?.enabled) {
+          // Ensure all required fields for enabled conditions exist
+          const conditionFields = ['outOfRange', 'threshold', 'frequency'];
+          for (const field of conditionFields) {
+            if (!(field in settings.conditions[metric])) {
+              throw new Error(`Missing required field for ${metric}: ${field}`);
+            }
+          }
+        }
+      }
+
+      // Make API request
       const response = await api.put(`/devices/${deviceId}/alerts`, settings);
+      
+      // Validate response
+      if (!response.data) {
+        throw new Error('No data received from server');
+      }
+
+      console.log('Alert settings updated successfully:', response.data);
       return response.data;
     } catch (error) {
       console.error('Failed to update alert settings:', error);
-      throw new Error('Failed to update alert settings');
+      // Enhance error message for user
+      const message = error.response?.data?.error || error.message;
+      throw new Error(`Failed to update alert settings: ${message}`);
     }
   },
 

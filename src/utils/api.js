@@ -28,9 +28,38 @@ api.interceptors.response.use(
       method: error.config?.method,
       status: error.response?.status,
       data: error.response?.data,
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
-    return Promise.reject(error);
+
+    // Enhance error message based on status code
+    let errorMessage = 'An unexpected error occurred';
+    if (error.response) {
+      switch (error.response.status) {
+        case 400:
+          errorMessage = 'Invalid request. Please check your input.';
+          break;
+        case 401:
+          errorMessage = 'Unauthorized. Please log in again.';
+          break;
+        case 403:
+          errorMessage = 'Access denied. You do not have permission.';
+          break;
+        case 404:
+          errorMessage = 'Resource not found.';
+          break;
+        case 500:
+          errorMessage = 'Server error. Please try again later.';
+          break;
+        default:
+          errorMessage = error.response.data?.error || error.message;
+      }
+    }
+
+    const enhancedError = new Error(errorMessage);
+    enhancedError.originalError = error;
+    enhancedError.response = error.response;
+    return Promise.reject(enhancedError);
   }
 );
 
