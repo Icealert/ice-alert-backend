@@ -26,7 +26,8 @@ export default defineConfig({
           });
         }
       }
-    }
+    },
+    historyApiFallback: true
   },
   resolve: {
     alias: {
