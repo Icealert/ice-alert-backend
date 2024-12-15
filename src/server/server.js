@@ -16,19 +16,33 @@ app.put('/api/devices/:id/alerts', async (req, res) => {
     const { id } = req.params;
     const settings = req.body;
     
+    // Transform the settings to match database schema
+    const dbSettings = {
+      device_id: id,
+      enabled: settings.enabled,
+      recipients: settings.recipients,
+      conditions: settings.conditions,
+      combination_alerts: settings.combinationAlerts, // Transform the key name
+      updated_at: new Date().toISOString()
+    };
+
     // Store in Supabase
     const { data, error } = await supabase
       .from('alert_settings')
-      .upsert({ 
-        device_id: id,
-        ...settings,
-        updated_at: new Date().toISOString()
-      })
+      .upsert(dbSettings)
       .select()
       .single();
 
     if (error) throw error;
-    res.json(data);
+
+    // Transform the response back to frontend format
+    const responseData = {
+      ...data,
+      combinationAlerts: data.combination_alerts // Transform back for frontend
+    };
+    delete responseData.combination_alerts; // Remove the snake_case version
+
+    res.json(responseData);
   } catch (error) {
     console.error('Error updating alert settings:', error);
     res.status(500).json({ error: error.message });
@@ -80,8 +94,15 @@ app.get('/api/devices/:id/alerts', async (req, res) => {
       }
       throw error;
     }
+
+    // Transform the response to frontend format
+    const responseData = {
+      ...data,
+      combinationAlerts: data.combination_alerts || [] // Transform for frontend
+    };
+    delete responseData.combination_alerts; // Remove the snake_case version
     
-    res.json(data);
+    res.json(responseData);
   } catch (error) {
     console.error('Error getting alert settings:', error);
     res.status(500).json({ error: error.message });
