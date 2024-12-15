@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
   base: '/',
   server: {
-    port: 3000,
+    port: 5173,
+    cors: true,
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:3001',
@@ -17,14 +19,19 @@ export default defineConfig({
             console.log('proxy error', err);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
+            console.log('Sending Request:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+            console.log('Received Response:', proxyRes.statusCode, req.url);
           });
         }
       }
     }
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
   },
   build: {
     outDir: 'dist',
