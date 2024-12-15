@@ -14,7 +14,8 @@ api.interceptors.request.use(request => {
     url: request.url,
     baseURL: request.baseURL,
     headers: request.headers,
-    data: request.data
+    data: request.data,
+    withCredentials: request.withCredentials
   });
   return request;
 }, error => {
@@ -28,7 +29,8 @@ api.interceptors.response.use(
     console.log('Response:', {
       status: response.status,
       url: response.config.url,
-      data: response.data
+      data: response.data,
+      headers: response.headers
     });
     return response;
   },
@@ -39,7 +41,9 @@ api.interceptors.response.use(
       status: error.response?.status,
       data: error.response?.data,
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      headers: error.config?.headers,
+      withCredentials: error.config?.withCredentials
     });
 
     // Enhance error message based on status code
@@ -66,6 +70,13 @@ api.interceptors.response.use(
       }
     } else if (error.request) {
       errorMessage = 'Network error. Please check your connection.';
+      // Log additional CORS-related information
+      console.error('CORS Error Details:', {
+        origin: window.location.origin,
+        targetUrl: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers
+      });
     }
 
     const enhancedError = new Error(errorMessage);
@@ -118,8 +129,13 @@ export const deviceService = {
         }
       }
 
-      // Make API request
-      const response = await api.put(`/devices/${deviceId}/alerts`, settings);
+      // Make API request with explicit CORS headers
+      const response = await api.put(`/devices/${deviceId}/alerts`, settings, {
+        headers: {
+          ...API_CONFIG.headers,
+          'Origin': window.location.origin
+        }
+      });
       
       // Validate response
       if (!response.data) {
