@@ -1,11 +1,10 @@
 import axios from 'axios';
-import API_BASE_URL from './config';
+import API_BASE_URL, { API_CONFIG } from './config';
 
+// Create axios instance with default config
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  ...API_CONFIG
 });
 
 // Add request interceptor for debugging
@@ -14,9 +13,13 @@ api.interceptors.request.use(request => {
     method: request.method?.toUpperCase(),
     url: request.url,
     baseURL: request.baseURL,
-    headers: request.headers
+    headers: request.headers,
+    data: request.data
   });
   return request;
+}, error => {
+  console.error('Request Error:', error);
+  return Promise.reject(error);
 });
 
 // Add response interceptor for debugging
@@ -35,9 +38,40 @@ api.interceptors.response.use(
       method: error.config?.method,
       status: error.response?.status,
       data: error.response?.data,
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
-    return Promise.reject(error);
+
+    // Enhance error message based on status code
+    let errorMessage = 'An unexpected error occurred';
+    if (error.response) {
+      switch (error.response.status) {
+        case 400:
+          errorMessage = 'Invalid request. Please check your input.';
+          break;
+        case 401:
+          errorMessage = 'Unauthorized. Please log in again.';
+          break;
+        case 403:
+          errorMessage = 'Access denied. You do not have permission.';
+          break;
+        case 404:
+          errorMessage = 'Resource not found.';
+          break;
+        case 500:
+          errorMessage = 'Server error. Please try again later.';
+          break;
+        default:
+          errorMessage = error.response.data?.error || error.message;
+      }
+    } else if (error.request) {
+      errorMessage = 'Network error. Please check your connection.';
+    }
+
+    const enhancedError = new Error(errorMessage);
+    enhancedError.originalError = error;
+    enhancedError.response = error.response;
+    return Promise.reject(enhancedError);
   }
 );
 
@@ -50,7 +84,7 @@ export const deviceService = {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch device:', error);
-      throw new Error('Failed to fetch device data');
+      throw error;
     }
   },
 
@@ -62,7 +96,7 @@ export const deviceService = {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch readings:', error);
-      throw new Error('Failed to fetch device readings');
+      throw error;
     }
   },
 
@@ -84,20 +118,6 @@ export const deviceService = {
         }
       }
 
-      // Validate conditions
-      const metrics = ['temperature', 'humidity', 'flowRate'];
-      for (const metric of metrics) {
-        if (settings.conditions[metric]?.enabled) {
-          // Ensure all required fields for enabled conditions exist
-          const conditionFields = ['outOfRange', 'threshold', 'frequency'];
-          for (const field of conditionFields) {
-            if (!(field in settings.conditions[metric])) {
-              throw new Error(`Missing required field for ${metric}: ${field}`);
-            }
-          }
-        }
-      }
-
       // Make API request
       const response = await api.put(`/devices/${deviceId}/alerts`, settings);
       
@@ -110,9 +130,7 @@ export const deviceService = {
       return response.data;
     } catch (error) {
       console.error('Failed to update alert settings:', error);
-      // Enhance error message for user
-      const message = error.response?.data?.error || error.message;
-      throw new Error(`Failed to update alert settings: ${message}`);
+      throw error;
     }
   },
 
@@ -124,7 +142,7 @@ export const deviceService = {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch alert settings:', error);
-      throw new Error('Failed to fetch alert settings');
+      throw error;
     }
   },
 
@@ -136,7 +154,7 @@ export const deviceService = {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch alert history:', error);
-      throw new Error('Failed to fetch alert history');
+      throw error;
     }
   }
 };

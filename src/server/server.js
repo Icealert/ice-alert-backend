@@ -4,8 +4,31 @@ const { checkAndSendAlerts } = require('./emailService');
 const { supabase } = require('./supabase');
 
 const app = express();
-app.use(cors());
+
+// Configure CORS
+const corsOptions = {
+  origin: [
+    'https://ice-alert-frontend1.vercel.app',
+    'https://ice-alert-frontend1-git-main-icealerts-projects.vercel.app',
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Add headers middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', true);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
 
 // Store alert settings in memory (replace with database in production)
 const alertSettingsStore = new Map();
