@@ -9,6 +9,8 @@ const DeviceAnalytics = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [deviceDetails, setDeviceDetails] = useState(location.state?.deviceDetails);
+  const [loading, setLoading] = useState(!location.state?.deviceDetails);
+  const [error, setError] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     name: '',
@@ -1231,14 +1233,19 @@ const DeviceAnalytics = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const data = await deviceService.getDevice(deviceId);
         setDeviceDetails(data);
       } catch (error) {
         console.error('Error fetching device data:', error);
-        // If there's an error, try to use the state data or navigate back
+        setError(error.message || 'Failed to load device data');
+        // If there's an error and no state data, navigate back
         if (!location.state?.deviceDetails) {
-          navigate('/');
+          navigate('/', { replace: true });
         }
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -1248,7 +1255,51 @@ const DeviceAnalytics = () => {
     }
   }, [deviceId, navigate, location.state]);
 
-  if (!deviceDetails) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading device data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="text-red-500 text-xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Device</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!deviceDetails) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Device Not Found</h2>
+          <p className="text-gray-600 mb-4">The requested device could not be found.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">

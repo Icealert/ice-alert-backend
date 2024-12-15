@@ -10,7 +10,7 @@ const App = () => {
       <div className="min-h-screen bg-gray-100">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/devices/:deviceId" element={<DeviceAnalytics />} />
+          <Route path="/device/:deviceId" element={<DeviceAnalytics />} />
           <Route path="/analytics" element={<DeviceAnalytics />} />
         </Routes>
       </div>

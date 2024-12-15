@@ -76,7 +76,7 @@ const DeviceCard = ({
   };
 
   const handleCardClick = () => {
-    navigate(`/devices/${iceAlertSerial}`, {
+    navigate(`/device/${iceAlertSerial}`, {
       state: {
         deviceDetails: {
           name,
