@@ -256,6 +256,81 @@ app.get('/api/devices/:id', async (req, res) => {
   }
 });
 
+// Add endpoint to search by ice_alert_serial
+app.get('/api/devices/by-serial/:serial', async (req, res) => {
+  try {
+    const { serial } = req.params;
+    console.log('Device lookup by serial:', {
+      serial,
+      headers: req.headers,
+      origin: req.headers.origin,
+      method: req.method,
+      path: req.path
+    });
+    
+    const { data, error } = await supabase
+      .from('devices')
+      .select(`
+        *,
+        latest_readings (
+          temperature,
+          humidity,
+          flow_rate,
+          timestamp
+        ),
+        alert_settings (*)
+      `)
+      .eq('ice_alert_serial', serial)
+      .single();
+
+    if (error) {
+      console.error('Supabase query error:', {
+        error,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error;
+    }
+    
+    if (!data) {
+      console.log('Device not found with ice_alert_serial:', serial);
+      return res.status(404).json({ 
+        error: 'Device not found',
+        details: {
+          searchId: serial,
+          searchType: 'ice_alert_serial'
+        }
+      });
+    }
+    
+    console.log('Device found by serial:', {
+      id: data.id,
+      name: data.name,
+      ice_alert_serial: data.ice_alert_serial,
+      has_readings: !!data.latest_readings,
+      has_settings: !!data.alert_settings
+    });
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching device by serial:', {
+      error,
+      stack: error.stack,
+      serial: req.params.serial,
+      headers: req.headers
+    });
+    res.status(500).json({ 
+      error: error.message,
+      details: {
+        code: error.code,
+        hint: error.hint
+      }
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -96,7 +96,10 @@ export const deviceService = {
         origin: window.location.origin
       });
       
+      // Try to find device by UUID first, then by ice_alert_serial
       const response = await api.get(`/devices/${encodeURIComponent(deviceId)}`);
+      
+      // Log success
       console.log('Device fetch successful:', {
         deviceId,
         status: response.status,
@@ -107,6 +110,7 @@ export const deviceService = {
       
       return response.data;
     } catch (error) {
+      // Log detailed error information
       console.error('Failed to fetch device:', {
         deviceId,
         error: {
@@ -123,6 +127,18 @@ export const deviceService = {
         },
         timestamp: new Date().toISOString()
       });
+
+      // If the error is 404, try searching by ice_alert_serial
+      if (error.response?.status === 404) {
+        try {
+          const response = await api.get(`/devices/by-serial/${encodeURIComponent(deviceId)}`);
+          return response.data;
+        } catch (serialError) {
+          console.error('Failed to fetch device by serial:', serialError);
+          throw serialError;
+        }
+      }
+
       throw error;
     }
   },
