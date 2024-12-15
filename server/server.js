@@ -230,17 +230,70 @@ app.put('/api/devices/:id/alerts', async (req, res) => {
     const { id } = req.params;
     const settings = req.body;
     
+    // Transform frontend settings to match database schema
+    const dbSettings = {
+      device_id: id,
+      enabled: settings.enabled,
+      recipients: settings.recipients || [],
+      conditions: settings.conditions || {},
+      combination_alerts: settings.combinationAlerts || [],
+      // Extract numeric values from conditions if they exist
+      temperature_min: settings.conditions?.temperature?.min || 20,
+      temperature_max: settings.conditions?.temperature?.max || 25,
+      humidity_min: settings.conditions?.humidity?.min || 45,
+      humidity_max: settings.conditions?.humidity?.max || 55,
+      flow_rate_min: settings.conditions?.flowRate?.min || 1.5,
+      flow_rate_max: settings.conditions?.flowRate?.max || 3.0,
+      flow_rate_warning_threshold: settings.conditions?.flowRate?.warningThreshold || 120,
+      flow_rate_critical_threshold: settings.conditions?.flowRate?.criticalThreshold || 240,
+      updated_at: new Date().toISOString()
+    };
+
+    console.log('Updating alert settings:', {
+      deviceId: id,
+      settings: dbSettings,
+      timestamp: new Date().toISOString()
+    });
+
     const { data, error } = await supabase
       .from('alert_settings')
-      .update(settings)
-      .eq('device_id', id)
+      .upsert(dbSettings)
       .select();
 
-    if (error) throw error;
-    res.json(data[0]);
+    if (error) {
+      console.error('Supabase error updating alert settings:', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      throw new Error('No data returned after update');
+    }
+
+    // Transform the response back to frontend format
+    const responseData = {
+      ...data[0],
+      combinationAlerts: data[0].combination_alerts || []
+    };
+    delete responseData.combination_alerts;
+
+    console.log('Alert settings updated successfully:', {
+      deviceId: id,
+      responseData,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json(responseData);
   } catch (error) {
-    console.error('Error updating alert settings:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error updating alert settings:', {
+      error,
+      stack: error.stack,
+      deviceId: req.params.id,
+      body: req.body
+    });
+    res.status(500).json({ 
+      error: error.message,
+      details: error.details || 'Failed to update alert settings'
+    });
   }
 });
 
