@@ -8,6 +8,7 @@ const app = express();
 // Configure CORS to accept requests from both development and production frontends
 app.use(cors({
   origin: [
+    'https://ice-alert-frontend1.vercel.app',
     'https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app',
     'http://localhost:3000'
   ],

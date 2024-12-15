@@ -1,32 +1,57 @@
 import axios from 'axios';
+import API_BASE_URL from '../api/config';
 
-// Always use the deployed backend URL
-const API_BASE_URL = 'https://ice-alert-backend.onrender.com/api';
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: `${API_BASE_URL}/api`,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
-const api = {
+// Add request interceptor for debugging
+api.interceptors.request.use(request => {
+  console.log('Starting Request:', request.method.toUpperCase(), request.url);
+  console.log('Request Headers:', request.headers);
+  return request;
+});
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  response => {
+    console.log('Response:', response.status, response.data);
+    return response;
+  },
+  error => {
+    console.error('API Error:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    return Promise.reject(error);
+  }
+);
+
+// API endpoints
+export const endpoints = {
   // Device endpoints
-  getDevices: () => axios.get(`${API_BASE_URL}/devices`),
-  
-  getDeviceDetails: (deviceId) => 
-    axios.get(`${API_BASE_URL}/devices/${deviceId}`),
+  getDevices: () => api.get('/devices'),
+  getDeviceDetails: (deviceId) => api.get(`/devices/${deviceId}`),
   
   // Alert settings endpoints
-  getAlertSettings: (deviceId) =>
-    axios.get(`${API_BASE_URL}/devices/${deviceId}/alerts`),
-  
-  updateAlertSettings: (deviceId, settings) =>
-    axios.put(`${API_BASE_URL}/devices/${deviceId}/alerts`, settings),
+  getAlertSettings: (deviceId) => api.get(`/devices/${deviceId}/alerts`),
+  updateAlertSettings: (deviceId, settings) => api.put(`/devices/${deviceId}/alerts`, settings),
   
   // Readings endpoints
-  getDeviceReadings: (deviceId, hours = 24) =>
-    axios.get(`${API_BASE_URL}/devices/${deviceId}/readings?hours=${hours}`),
+  getDeviceReadings: (deviceId, hours = 24) => api.get(`/devices/${deviceId}/readings?hours=${hours}`),
   
   // Alert history endpoints
-  getAlertHistory: (deviceId, days = 7) =>
-    axios.get(`${API_BASE_URL}/devices/${deviceId}/alert-history?days=${days}`),
+  getAlertHistory: (deviceId, days = 7) => api.get(`/devices/${deviceId}/alert-history?days=${days}`),
   
   // Health check
-  checkHealth: () => axios.get(`${API_BASE_URL}/health`)
+  checkHealth: () => api.get('/health')
 };
 
-export default api; 
+export default endpoints; 
