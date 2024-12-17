@@ -5,18 +5,31 @@ require('dotenv').config();
 
 const app = express();
 
-// Configure CORS to accept requests from both development and production frontends
+// Configure CORS
+const allowedOrigins = [
+  'https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app',
+  'https://ice-alert-frontend1.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+
 app.use(cors({
-  origin: [
-    'https://ice-alert-frontend1.vercel.app',
-    'https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow all vercel.app subdomains and specific origins
+    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-  optionsSuccessStatus: 200
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
+  optionsSuccessStatus: 200,
+  maxAge: 86400 // Cache preflight request for 24 hours
 }));
 app.use(express.json());
 
@@ -102,33 +115,38 @@ app.get('/api/devices', async (req, res) => {
     console.log('SUPABASE_ANON_KEY exists:', !!process.env.SUPABASE_ANON_KEY);
     console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
     
-    const { data, error } = await supabase
-      .from('devices')
-      .select(`
-        *,
-        latest_readings (
-          temperature,
-          humidity,
-          flow_rate,
-          timestamp
-        )
-      `);
+    // Get device settings
+    const { data: settings, error: settingsError } = await supabase
+      .from('device_settings')
+      .select('*');
 
-    if (error) {
-      console.error('Supabase error details:', error);
-      throw error;
-    }
-    console.log('Devices fetched successfully:', data?.length || 0, 'devices');
-    res.json(data);
+    if (settingsError) throw settingsError;
+
+    // Get latest data for each device
+    const { data: deviceData, error: dataError } = await supabase
+      .from('device_data')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (dataError) throw dataError;
+
+    // Combine settings and data
+    const devices = settings.map(device => {
+      const latestData = deviceData.find(d => d.icealert_id === device.icealert_id);
+      return {
+        ...device,
+        latest_readings: latestData ? {
+          temperature: latestData.temperature,
+          humidity: latestData.humidity,
+          flow_rate: latestData.flow_rate,
+          timestamp: latestData.created_at
+        } : null
+      };
+    });
+
+    res.json(devices);
   } catch (error) {
     console.error('Error fetching devices:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-      code: error.code,
-      details: error.details
-    });
     res.status(500).json({ error: error.message });
   }
 });
@@ -136,26 +154,38 @@ app.get('/api/devices', async (req, res) => {
 app.get('/api/devices/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { data, error } = await supabase
-      .from('devices')
-      .select(`
-        *,
-        latest_readings (
-          temperature,
-          humidity,
-          flow_rate,
-          timestamp
-        ),
-        alert_settings (*)
-      `)
-      .eq('id', id)
+    
+    // Get device settings
+    const { data: settings, error: settingsError } = await supabase
+      .from('device_settings')
+      .select('*')
+      .eq('icealert_id', id)
       .single();
 
-    if (error) throw error;
-    if (!data) {
-      return res.status(404).json({ error: 'Device not found' });
-    }
-    res.json(data);
+    if (settingsError) throw settingsError;
+
+    // Get latest device data
+    const { data: latestData, error: dataError } = await supabase
+      .from('device_data')
+      .select('*')
+      .eq('icealert_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (dataError && dataError.code !== 'PGRST116') throw dataError;
+
+    const deviceInfo = {
+      ...settings,
+      latest_readings: latestData ? {
+        temperature: latestData.temperature,
+        humidity: latestData.humidity,
+        flow_rate: latestData.flow_rate,
+        timestamp: latestData.created_at
+      } : null
+    };
+
+    res.json(deviceInfo);
   } catch (error) {
     console.error('Error fetching device:', error);
     res.status(500).json({ error: error.message });
@@ -233,11 +263,11 @@ app.get('/api/devices/:id/readings', async (req, res) => {
     const { hours = 24 } = req.query;
     
     const { data, error } = await supabase
-      .from('readings')
+      .from('device_data')
       .select('*')
-      .eq('device_id', id)
-      .gte('timestamp', new Date(Date.now() - hours * 60 * 60 * 1000).toISOString())
-      .order('timestamp', { ascending: true });
+      .eq('icealert_id', id)
+      .gte('created_at', new Date(Date.now() - hours * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: true });
 
     if (error) throw error;
     res.json(data);
@@ -250,19 +280,26 @@ app.get('/api/devices/:id/readings', async (req, res) => {
 // ESP32 data ingestion endpoint
 app.post('/api/readings', async (req, res) => {
   try {
-    const { device_id, temperature, humidity, flow_rate } = req.body;
+    const { icealert_id, temperature, humidity, flow_rate } = req.body;
     
     const { data, error } = await supabase
-      .from('readings')
-      .insert([
-        { device_id, temperature, humidity, flow_rate }
-      ])
+      .from('device_data')
+      .insert([{
+        icealert_id,
+        temperature,
+        humidity,
+        flow_rate,
+        temperature_timestamp: new Date().toISOString(),
+        humidity_timestamp: new Date().toISOString(),
+        flow_rate_timestamp: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }])
       .select();
 
     if (error) throw error;
 
     // Check alert conditions
-    await checkAlertConditions(device_id, { temperature, humidity, flow_rate });
+    await checkAlertConditions(icealert_id, { temperature, humidity, flow_rate });
 
     res.json(data[0]);
   } catch (error) {
@@ -383,31 +420,52 @@ app.get('/api/devices/:id/alert-history', async (req, res) => {
 });
 
 // Helper function to check alert conditions
-async function checkAlertConditions(deviceId, reading) {
+async function checkAlertConditions(icealert_id, reading) {
   try {
-    // Get device alert settings
+    // Get device settings
     const { data: settings, error: settingsError } = await supabase
-      .from('alert_settings')
+      .from('device_settings')
       .select('*')
-      .eq('device_id', deviceId)
+      .eq('icealert_id', icealert_id)
       .single();
 
     if (settingsError) throw settingsError;
-    if (!settings || !settings.enabled) return;
+    if (!settings || !settings.email_alerts_enabled) return;
 
     // Check temperature
     if (reading.temperature < settings.temperature_min || reading.temperature > settings.temperature_max) {
-      await createAlert(deviceId, 'temperature', reading.temperature, `${settings.temperature_min}-${settings.temperature_max}`);
+      if (settings.temperature_alert_enabled) {
+        // Implement alert logic here
+        console.log('Temperature alert triggered:', {
+          device: icealert_id,
+          value: reading.temperature,
+          threshold: `${settings.temperature_min}-${settings.temperature_max}`
+        });
+      }
     }
 
     // Check humidity
     if (reading.humidity < settings.humidity_min || reading.humidity > settings.humidity_max) {
-      await createAlert(deviceId, 'humidity', reading.humidity, `${settings.humidity_min}-${settings.humidity_max}`);
+      if (settings.humidity_alert_enabled) {
+        // Implement alert logic here
+        console.log('Humidity alert triggered:', {
+          device: icealert_id,
+          value: reading.humidity,
+          threshold: `${settings.humidity_min}-${settings.humidity_max}`
+        });
+      }
     }
 
     // Check flow rate
     if (reading.flow_rate < settings.flow_rate_min || reading.flow_rate > settings.flow_rate_max) {
-      await createAlert(deviceId, 'flow_rate', reading.flow_rate, `${settings.flow_rate_min}-${settings.flow_rate_max}`);
+      if (settings.flow_rate_alert_enabled) {
+        // Implement alert logic here
+        console.log('Flow rate alert triggered:', {
+          device: icealert_id,
+          value: reading.flow_rate,
+          threshold: `${settings.flow_rate_min}-${settings.flow_rate_max}`
+        });
+      }
     }
   } catch (error) {
     console.error('Error checking alert conditions:', error);
@@ -432,6 +490,32 @@ async function createAlert(deviceId, type, value, threshold) {
     console.error('Error creating alert:', error);
   }
 }
+
+// Test connection endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    console.log('Testing database connection...');
+    const { data: settings, error: settingsError } = await supabase
+      .from('device_settings')
+      .select('count');
+
+    if (settingsError) throw settingsError;
+
+    res.json({ 
+      status: 'ok', 
+      message: 'Database connection successful',
+      count: settings.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Database connection test failed:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {

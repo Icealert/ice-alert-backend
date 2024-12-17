@@ -3,7 +3,7 @@ import API_BASE_URL, { API_CONFIG } from './config';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -17,6 +17,7 @@ api.interceptors.request.use(request => {
     method: request.method?.toUpperCase(),
     url: request.url,
     baseURL: request.baseURL,
+    fullUrl: `${request.baseURL}${request.url}`,
     headers: request.headers,
     data: request.data,
     withCredentials: request.withCredentials
@@ -33,6 +34,7 @@ api.interceptors.response.use(
     console.log('Response:', {
       status: response.status,
       url: response.config.url,
+      fullUrl: `${response.config.baseURL}${response.config.url}`,
       data: response.data,
       headers: response.headers
     });
@@ -41,6 +43,7 @@ api.interceptors.response.use(
   error => {
     console.error('API Error:', {
       url: error.config?.url,
+      fullUrl: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown',
       method: error.config?.method,
       status: error.response?.status,
       data: error.response?.data,
@@ -78,6 +81,7 @@ api.interceptors.response.use(
       console.error('CORS Error Details:', {
         origin: window.location.origin,
         targetUrl: error.config?.url,
+        fullUrl: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown',
         method: error.config?.method,
         headers: error.config?.headers
       });
@@ -86,121 +90,72 @@ api.interceptors.response.use(
     const enhancedError = new Error(errorMessage);
     enhancedError.originalError = error;
     enhancedError.response = error.response;
+    enhancedError.status = error.response?.status;
     return Promise.reject(enhancedError);
   }
 );
 
-export const deviceService = {
-  // Fetch device details
+// Export the service
+const deviceService = {
+  // Get all devices
+  async getDevices() {
+    try {
+      console.log('Fetching all devices');
+      const response = await api.get('/devices');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch devices:', error);
+      throw error;
+    }
+  },
+
+  // Get device by ID
   async getDevice(deviceId) {
     try {
-      console.log('Fetching device:', {
-        deviceId,
-        timestamp: new Date().toISOString(),
-        origin: window.location.origin
-      });
-      
-      // Try to find device by UUID first
-      try {
-        const response = await api.get(`/devices/${encodeURIComponent(deviceId)}`);
-        return response.data;
-      } catch (error) {
-        if (error.response?.status === 404) {
-          // If not found by UUID, try by ice_alert_serial
-          console.log('Device not found by UUID, trying ice_alert_serial');
-          const serialResponse = await api.get(`/devices/by-serial/${encodeURIComponent(deviceId)}`);
-          return serialResponse.data;
-        }
-        throw error;
-      }
+      console.log('Fetching device:', deviceId);
+      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}`);
+      return response.data;
     } catch (error) {
-      console.error('Failed to fetch device:', {
-        deviceId,
-        error: {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-          stack: error.stack
-        },
-        request: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers,
-          baseURL: error.config?.baseURL
-        },
-        timestamp: new Date().toISOString()
-      });
+      console.error('Failed to fetch device:', error);
       throw error;
     }
   },
 
-  // Fetch device readings
-  async getReadings(deviceId, hours = 24) {
+  // Get device by IceAlert ID
+  async getDeviceByIceAlertId(icealertId) {
+    try {
+      console.log('Fetching device by IceAlert ID:', icealertId);
+      const response = await api.get(`/devices/by-icealert/${encodeURIComponent(icealertId)}`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch device by IceAlert ID:', error);
+      throw error;
+    }
+  },
+
+  // Get device readings
+  async getDeviceReadings(deviceId, hours = 24) {
     try {
       console.log('Fetching readings for device:', deviceId, 'hours:', hours);
-      const response = await api.get(`/devices/${deviceId}/readings?hours=${hours}`);
+      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/readings`, {
+        params: { hours }
+      });
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch readings:', error);
+      console.error('Failed to fetch device readings:', error);
       throw error;
     }
   },
 
-  // Update alert settings
-  async updateAlertSettings(deviceId, settings) {
+  // Submit new reading
+  async submitReading(reading) {
     try {
-      console.log('Updating alert settings:', {
-        deviceId,
-        settings,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Validate settings object
-      if (!settings || typeof settings !== 'object') {
-        throw new Error('Invalid settings object');
-      }
-
-      // Ensure required fields exist
-      const requiredFields = ['enabled', 'conditions'];
-      for (const field of requiredFields) {
-        if (!(field in settings)) {
-          throw new Error(`Missing required field: ${field}`);
-        }
-      }
-
-      // Make API request
-      const response = await api.put(`/devices/${encodeURIComponent(deviceId)}/alerts`, settings);
-      
-      if (!response.data) {
-        throw new Error('No data received from server');
-      }
-
-      console.log('Alert settings updated successfully:', {
-        deviceId,
-        status: response.status,
-        data: response.data,
-        timestamp: new Date().toISOString()
-      });
-      
+      console.log('Submitting new reading:', reading);
+      const response = await api.post('/readings', reading);
       return response.data;
     } catch (error) {
-      console.error('Failed to update alert settings:', {
-        deviceId,
-        error: {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-          stack: error.stack
-        },
-        request: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers,
-          baseURL: error.config?.baseURL
-        },
-        timestamp: new Date().toISOString()
-      });
-      throw new Error('Failed to save settings. Please try again.');
+      console.error('Failed to submit reading:', error);
+      throw error;
     }
   },
 
@@ -216,14 +171,52 @@ export const deviceService = {
     }
   },
 
+  // Update alert settings
+  async updateAlertSettings(deviceId, settings) {
+    try {
+      console.log('Updating alert settings for device:', deviceId, settings);
+      const response = await api.put(`/devices/${encodeURIComponent(deviceId)}/alerts`, settings);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update alert settings:', error);
+      throw error;
+    }
+  },
+
   // Get alert history
   async getAlertHistory(deviceId, days = 7) {
     try {
       console.log('Fetching alert history for device:', deviceId, 'days:', days);
-      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/alert-history?days=${days}`);
+      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/alert-history`, {
+        params: { days }
+      });
       return response.data;
     } catch (error) {
       console.error('Failed to fetch alert history:', error);
+      throw error;
+    }
+  },
+
+  // Test database connection
+  async testConnection() {
+    try {
+      console.log('Testing database connection');
+      const response = await api.get('/test-db');
+      return response.data;
+    } catch (error) {
+      console.error('Database connection test failed:', error);
+      throw error;
+    }
+  },
+
+  // Check database schema
+  async checkSchema() {
+    try {
+      console.log('Checking database schema');
+      const response = await api.get('/debug/schema');
+      return response.data;
+    } catch (error) {
+      console.error('Schema check failed:', error);
       throw error;
     }
   }

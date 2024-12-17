@@ -1,9 +1,19 @@
-// Get the API URL from environment variables, fallback to production URL if not set
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ice-alert-backend.onrender.com';
+// Get the API URL from environment variables with proper fallbacks
+const API_BASE_URL = import.meta.env.VITE_API_URL || (
+  import.meta.env.MODE === 'production'
+    ? 'https://ice-alert-backend.onrender.com/api'
+    : 'http://localhost:3001/api'
+);
+
+// Remove trailing /api if it exists in the environment variable
+const normalizedURL = API_BASE_URL.endsWith('/api') 
+  ? API_BASE_URL
+  : `${API_BASE_URL}/api`;
 
 // Log the API configuration
 console.log('API Configuration:', {
-  baseUrl: API_BASE_URL,
+  rawUrl: API_BASE_URL,
+  normalizedUrl: normalizedURL,
   environment: import.meta.env.MODE,
   origin: typeof window !== 'undefined' ? window.location.origin : 'unknown',
   timestamp: new Date().toISOString()
@@ -11,10 +21,10 @@ console.log('API Configuration:', {
 
 // Validate the URL format
 try {
-  new URL(API_BASE_URL);
+  new URL(normalizedURL);
 } catch (error) {
   console.error('Invalid API URL configuration:', {
-    url: API_BASE_URL,
+    url: normalizedURL,
     error: {
       message: error.message,
       name: error.name,
@@ -23,10 +33,10 @@ try {
     environment: import.meta.env.MODE,
     timestamp: new Date().toISOString()
   });
-  throw new Error(`Invalid API URL: ${API_BASE_URL}`);
+  throw new Error(`Invalid API URL: ${normalizedURL}`);
 }
 
-export default API_BASE_URL;
+export default normalizedURL;
 
 // Export additional configuration
 export const API_CONFIG = {
@@ -39,7 +49,7 @@ export const API_CONFIG = {
 
 // Log the complete configuration
 console.log('Complete API Configuration:', {
-  baseUrl: API_BASE_URL,
+  baseUrl: normalizedURL,
   config: API_CONFIG,
   environment: import.meta.env.MODE,
   timestamp: new Date().toISOString()
