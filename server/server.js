@@ -324,9 +324,9 @@ app.get('/api/devices/:id/alerts', async (req, res) => {
   try {
     const { id } = req.params;
     const { data, error } = await supabase
-      .from('alert_settings')
+      .from('device_settings')
       .select('*')
-      .eq('device_id', id)
+      .eq('icealert_id', id)
       .single();
 
     if (error) throw error;
@@ -342,34 +342,37 @@ app.put('/api/devices/:id/alerts', async (req, res) => {
     const { id } = req.params;
     const settings = req.body;
     
-    // Transform frontend settings to match database schema
-    const dbSettings = {
-      device_id: id,
-      enabled: settings.enabled,
-      recipients: settings.recipients || [],
-      conditions: settings.conditions || {},
-      combination_alerts: settings.combinationAlerts || [],
-      // Extract numeric values from conditions if they exist
-      temperature_min: settings.conditions?.temperature?.min || 20,
-      temperature_max: settings.conditions?.temperature?.max || 25,
-      humidity_min: settings.conditions?.humidity?.min || 45,
-      humidity_max: settings.conditions?.humidity?.max || 55,
-      flow_rate_min: settings.conditions?.flowRate?.min || 1.5,
-      flow_rate_max: settings.conditions?.flowRate?.max || 3.0,
-      flow_rate_warning_threshold: settings.conditions?.flowRate?.warningThreshold || 120,
-      flow_rate_critical_threshold: settings.conditions?.flowRate?.criticalThreshold || 240,
-      updated_at: new Date().toISOString()
-    };
-
     console.log('Updating alert settings:', {
       deviceId: id,
-      settings: dbSettings,
+      settings: settings,
       timestamp: new Date().toISOString()
     });
 
+    // Transform frontend settings to match database schema
+    const dbSettings = {
+      temperature_min: settings.normalRanges?.temperature?.min || 20,
+      temperature_max: settings.normalRanges?.temperature?.max || 25,
+      humidity_min: settings.normalRanges?.humidity?.min || 45,
+      humidity_max: settings.normalRanges?.humidity?.max || 55,
+      flow_rate_min: settings.normalRanges?.flowRate?.min || 1.5,
+      flow_rate_max: settings.normalRanges?.flowRate?.max || 3.0,
+      flow_rate_warning_hours: settings.alertThresholds?.flowRate?.warning || 2,
+      flow_rate_critical_hours: settings.alertThresholds?.flowRate?.critical || 4,
+      email_alerts_enabled: settings.enabled,
+      temperature_alert_enabled: settings.conditions?.temperature?.enabled,
+      temperature_alert_threshold: settings.conditions?.temperature?.thresholdValue,
+      humidity_alert_enabled: settings.conditions?.humidity?.enabled,
+      humidity_alert_threshold: settings.conditions?.humidity?.thresholdValue,
+      flow_rate_alert_enabled: settings.conditions?.flowRate?.enabled,
+      no_flow_alert_minutes: settings.conditions?.flowRate?.noFlowDuration || 30,
+      alert_frequency: settings.conditions?.temperature?.frequency || 'immediate',
+      updated_at: new Date().toISOString()
+    };
+
     const { data, error } = await supabase
-      .from('alert_settings')
-      .upsert(dbSettings)
+      .from('device_settings')
+      .update(dbSettings)
+      .eq('icealert_id', id)
       .select();
 
     if (error) {
@@ -377,24 +380,8 @@ app.put('/api/devices/:id/alerts', async (req, res) => {
       throw error;
     }
 
-    if (!data || data.length === 0) {
-      throw new Error('No data returned after update');
-    }
-
-    // Transform the response back to frontend format
-    const responseData = {
-      ...data[0],
-      combinationAlerts: data[0].combination_alerts || []
-    };
-    delete responseData.combination_alerts;
-
-    console.log('Alert settings updated successfully:', {
-      deviceId: id,
-      responseData,
-      timestamp: new Date().toISOString()
-    });
-
-    res.json(responseData);
+    console.log('Alert settings updated successfully:', data);
+    res.json(data[0]);
   } catch (error) {
     console.error('Error updating alert settings:', {
       error,
@@ -402,10 +389,7 @@ app.put('/api/devices/:id/alerts', async (req, res) => {
       deviceId: req.params.id,
       body: req.body
     });
-    res.status(500).json({ 
-      error: error.message,
-      details: error.details || 'Failed to update alert settings'
-    });
+    res.status(500).json({ error: error.message || 'Failed to update alert settings' });
   }
 });
 
