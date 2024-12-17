@@ -1,76 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import DeviceCard from '../components/DeviceCard';
+import deviceService from '../api/deviceService';
 
 function Dashboard() {
-  const machines = [
-    {
-      name: "Ice Machine 1",
-      location: "Main Kitchen",
-      partNumber: "KM-1900SAJ",
-      serialNumber: "M12345-67890",
-      iceAlertSerial: "IA-2024-0001",
-      temperature: "22.5°C",
-      humidity: "50%",
-      flowRate: "2.5 L/min",
-      lastFlowDetection: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      lastUpdated: "6:33:55 AM"
-    },
-    {
-      name: "Ice Machine 2",
-      location: "Bar Area",
-      partNumber: "ICE0500A3",
-      serialNumber: "I98765-43210",
-      iceAlertSerial: "IA-2024-0002",
-      temperature: "28.5°C",
-      humidity: "48%",
-      flowRate: "1.8 L/min",
-      lastFlowDetection: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      lastUpdated: "5:33:55 AM"
-    },
-    {
-      name: "Ice Machine 3",
-      location: "Storage Room",
-      partNumber: "CIM0530HA",
-      serialNumber: "S24680-13579",
-      iceAlertSerial: "IA-2024-0003",
-      temperature: "23.5°C",
-      humidity: "62%",
-      flowRate: "2.1 L/min",
-      lastFlowDetection: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      lastUpdated: "4:33:55 AM"
-    },
-    {
-      name: "Ice Machine 4",
-      location: "Banquet Hall",
-      partNumber: "KM-1601SRJ",
-      serialNumber: "M13579-24680",
-      iceAlertSerial: "IA-2024-0004",
-      temperature: "24.5°C",
-      humidity: "52%",
-      flowRate: "0.8 L/min",
-      lastFlowDetection: new Date(Date.now() - 4.5 * 60 * 60 * 1000).toISOString(),
-      lastUpdated: "6:33:55 AM"
-    },
-    {
-      name: "Ice Machine 5",
-      location: "Secondary Kitchen",
-      partNumber: "ICE1205HA",
-      serialNumber: "I11111-22222",
-      iceAlertSerial: "IA-2024-0005",
-      temperature: "26.8°C",
-      humidity: "49%",
-      flowRate: "2.2 L/min",
-      lastFlowDetection: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-      lastUpdated: "5:03:55 AM"
-    }
-  ];
+  const [machines, setMachines] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        setLoading(true);
+        const data = await deviceService.getDevices();
+        setMachines(data);
+      } catch (error) {
+        console.error('Error fetching devices:', error);
+        setError(error.message || 'Failed to load devices');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDevices();
+  }, []);
 
   // Calculate counts for each status
   const getCounts = () => {
     return machines.reduce((acc, machine) => {
-      const tempValue = parseFloat(machine.temperature.replace(/[^\d.-]/g, ''));
-      const humidityValue = parseFloat(machine.humidity.replace(/[^\d.-]/g, ''));
-      const hoursSinceFlow = Math.round((Date.now() - new Date(machine.lastFlowDetection).getTime()) / (1000 * 60 * 60));
+      const tempValue = parseFloat(machine.temperature?.replace(/[^\d.-]/g, '') || '0');
+      const humidityValue = parseFloat(machine.humidity?.replace(/[^\d.-]/g, '') || '0');
+      const hoursSinceFlow = machine.lastFlowDetection ? 
+        Math.round((Date.now() - new Date(machine.lastFlowDetection).getTime()) / (1000 * 60 * 60)) : 0;
 
       const isTempAbnormal = tempValue < 20 || tempValue > 25;
       const isFlowCritical = hoursSinceFlow >= 4;
@@ -89,53 +49,82 @@ function Dashboard() {
 
   const counts = getCounts();
 
-  return (
-    <div className="p-6 bg-gradient-to-br from-blue-50 to-gray-100 min-h-screen">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-4xl">❄️</span>
-          <div>
-            <h1 className="text-3xl font-bold text-blue-900">
-              IceAlert
-              <span className="text-blue-600 text-2xl ml-2">Dashboard</span>
-            </h1>
-            <div className="h-1 w-32 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full mt-1"></div>
-          </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading devices...</p>
         </div>
-        <p className="text-gray-600 ml-1">Real-time monitoring and alerts for your connected ice machines</p>
       </div>
+    );
+  }
 
-      {/* Status Summary Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-gray-600">📊 Total Machines</div>
-          <div className="text-2xl font-bold">{machines.length}</div>
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="text-red-500 text-xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Devices</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Try Again
+          </button>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-gray-600">✅ Safe</div>
-          <div className="text-2xl font-bold text-green-600">
-            {counts.good}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      {/* Status Overview */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Device Status Overview</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-600 text-sm font-medium">Good</p>
+                <p className="text-2xl font-bold text-green-700">{counts.good}</p>
+              </div>
+              <div className="bg-green-100 rounded-full p-2">
+                <span className="text-green-500 text-xl">✓</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-gray-600">⚠️ Warning</div>
-          <div className="text-2xl font-bold text-yellow-500">
-            {counts.warning}
+          <div className="bg-yellow-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-yellow-600 text-sm font-medium">Warning</p>
+                <p className="text-2xl font-bold text-yellow-700">{counts.warning}</p>
+              </div>
+              <div className="bg-yellow-100 rounded-full p-2">
+                <span className="text-yellow-500 text-xl">⚠️</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-gray-600">🚨 Critical</div>
-          <div className="text-2xl font-bold text-red-600">
-            {counts.critical}
+          <div className="bg-red-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-red-600 text-sm font-medium">Critical</p>
+                <p className="text-2xl font-bold text-red-700">{counts.critical}</p>
+              </div>
+              <div className="bg-red-100 rounded-full p-2">
+                <span className="text-red-500 text-xl">⚠️</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Device Cards */}
       <div className="grid grid-cols-2 gap-6">
-        {machines.map((machine, index) => (
+        {machines.map((machine) => (
           <DeviceCard 
-            key={index}
+            key={machine.icealert_id}
             {...machine}
           />
         ))}

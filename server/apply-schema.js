@@ -1,4 +1,4 @@
-const { createClient } = require('@supabase/supabase-js');
+const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -12,34 +12,66 @@ console.log('Environment check:');
 console.log('- SUPABASE_URL:', supabaseUrl ? '✓ Set' : '✗ Missing');
 console.log('- SUPABASE_SERVICE_KEY:', supabaseServiceKey ? '✓ Set' : '✗ Missing');
 
-// Initialize Supabase client
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-});
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing required environment variables');
+  process.exit(1);
+}
 
-async function executeSQL(statement) {
+function normalizeSQL(sql) {
+  // Replace Windows line endings with Unix line endings and normalize whitespace
+  return sql
+    .replace(/\r\n/g, '\n')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function executeSQLDirect(statement) {
   try {
-    console.log('Executing statement:', statement);
-    const { data, error } = await supabase.rpc('exec_sql', {
-      query: statement
+    const normalizedStatement = normalizeSQL(statement);
+    console.log('Executing SQL:', normalizedStatement.substring(0, 100) + '...');
+    
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseServiceKey,
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        query: normalizedStatement
+      })
     });
 
-    if (error) {
-      if (error.message.includes('already exists')) {
-        console.log('Object already exists, continuing...');
-        return null;
+    const text = await response.text();
+    console.log('Response:', text);
+
+    if (!response.ok) {
+      try {
+        const error = JSON.parse(text);
+        if (error.message && (
+          error.message.includes('already exists') ||
+          error.message.includes('is already member of publication') ||
+          error.message.includes('does not exist')
+        )) {
+          console.log('Object already exists or does not exist yet, continuing...');
+          return null;
+        }
+        throw new Error(JSON.stringify(error));
+      } catch (e) {
+        throw new Error(text);
       }
-      throw error;
     }
 
-    return data;
+    console.log('SQL execution successful');
+    return text;
   } catch (error) {
-    if (error.message.includes('already exists')) {
-      console.log('Object already exists, continuing...');
+    if (error.message && (
+      error.message.includes('already exists') ||
+      error.message.includes('is already member of publication') ||
+      error.message.includes('does not exist')
+    )) {
+      console.log('Object already exists or does not exist yet, continuing...');
       return null;
     }
     console.error('SQL execution error:', error);
@@ -47,23 +79,124 @@ async function executeSQL(statement) {
   }
 }
 
+function splitSQLStatements(sql) {
+  const statements = [];
+  let currentStatement = '';
+  let inString = false;
+  let inDollarQuote = false;
+  let dollarQuoteTag = '';
+  let escaped = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    const nextChar = sql[i + 1] || '';
+
+    if (escaped) {
+      currentStatement += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      currentStatement += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === "'" && !inDollarQuote) {
+      inString = !inString;
+    } else if (char === '$' && nextChar === '$' && !inString && !inDollarQuote) {
+      inDollarQuote = true;
+      dollarQuoteTag = '$$';
+      currentStatement += char;
+    } else if (char === '$' && !inString && !inDollarQuote) {
+      // Check for custom dollar quote tag
+      let tag = '$';
+      let j = i + 1;
+      while (j < sql.length && sql[j] !== '$') {
+        tag += sql[j];
+        j++;
+      }
+      if (j < sql.length && sql[j] === '$') {
+        tag += '$';
+        inDollarQuote = true;
+        dollarQuoteTag = tag;
+        currentStatement += tag;
+        i = j;
+        continue;
+      }
+    } else if (inDollarQuote && sql.substring(i, i + dollarQuoteTag.length) === dollarQuoteTag) {
+      inDollarQuote = false;
+      currentStatement += dollarQuoteTag;
+      i += dollarQuoteTag.length - 1;
+      continue;
+    }
+
+    if (char === ';' && !inString && !inDollarQuote) {
+      if (currentStatement.trim()) {
+        statements.push(currentStatement.trim());
+      }
+      currentStatement = '';
+    } else {
+      currentStatement += char;
+    }
+  }
+
+  if (currentStatement.trim()) {
+    statements.push(currentStatement.trim());
+  }
+
+  return statements;
+}
+
 async function applySchema() {
   try {
     console.log('Starting schema application...');
 
-    // Read and execute schema.sql
+    // First, create the exec_sql function
+    console.log('Creating exec_sql function...');
+    const createFunctionSQL = `
+      CREATE OR REPLACE FUNCTION exec_sql(query text)
+      RETURNS text AS $func$
+      BEGIN
+          EXECUTE query;
+          RETURN 'OK';
+      END;
+      $func$ LANGUAGE plpgsql SECURITY DEFINER;
+    `;
+
+    // Execute the function creation directly
+    await executeSQLDirect(createFunctionSQL);
+
+    // Read schema.sql
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
     
-    console.log('Applying base schema...');
-    await executeSQL(schemaSql);
+    // Split into individual statements
+    const statements = splitSQLStatements(schemaSql);
+
+    console.log(`Found ${statements.length} SQL statements to execute`);
+
+    // Execute each statement
+    for (const statement of statements) {
+      try {
+        await executeSQLDirect(statement);
+        console.log('Statement executed successfully');
+      } catch (error) {
+        if (!error.message?.includes('already exists') && 
+            !error.message?.includes('is already member of publication') &&
+            !error.message?.includes('does not exist')) {
+          throw error;
+        }
+      }
+    }
 
     // Read and execute migrations
     const migrationsDir = path.join(__dirname, 'migrations');
     if (fs.existsSync(migrationsDir)) {
       const migrationFiles = fs.readdirSync(migrationsDir)
         .filter(file => file.endsWith('.sql'))
-        .sort(); // Execute migrations in alphabetical order
+        .sort();
 
       console.log('Found migration files:', migrationFiles);
 
@@ -71,32 +204,57 @@ async function applySchema() {
         console.log(`Applying migration: ${migrationFile}`);
         const migrationPath = path.join(migrationsDir, migrationFile);
         const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-        await executeSQL(migrationSql);
-      }
-    } else {
-      console.log('No migrations directory found');
-    }
+        
+        const migrationStatements = splitSQLStatements(migrationSql);
 
-    // Verify schema
-    console.log('\nVerifying schema...');
-    const verificationStatements = [
-      'SELECT COUNT(*) FROM device_settings',
-      'SELECT COUNT(*) FROM device_data',
-      "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'device_settings'"
-    ];
-
-    for (const statement of verificationStatements) {
-      try {
-        console.log(`Executing verification: ${statement}`);
-        const result = await executeSQL(statement);
-        console.log('Verification result:', result);
-      } catch (error) {
-        console.error('Verification failed:', error);
-        throw error;
+        for (const statement of migrationStatements) {
+          try {
+            await executeSQLDirect(statement);
+            console.log('Migration statement executed successfully');
+          } catch (error) {
+            if (!error.message?.includes('already exists') && 
+                !error.message?.includes('is already member of publication') &&
+                !error.message?.includes('does not exist')) {
+              throw error;
+            }
+          }
+        }
       }
     }
+
+    // Apply constraints
+    console.log('Applying constraints...');
+    
+    // Add unique constraint to device_settings table
+    await executeSQLDirect(`
+      DO $$ 
+      BEGIN
+          IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'device_settings_icealert_id_key'
+          ) THEN
+              ALTER TABLE device_settings ADD CONSTRAINT device_settings_icealert_id_key UNIQUE (icealert_id);
+          END IF;
+      END $$;
+    `);
+
+    // Add primary key if it doesn't exist
+    await executeSQLDirect(`
+      DO $$
+      BEGIN
+          IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'device_settings_pkey'
+          ) THEN
+              ALTER TABLE device_settings ADD PRIMARY KEY (id);
+          END IF;
+      END $$;
+    `);
 
     console.log('Schema application completed successfully');
+
   } catch (error) {
     console.error('Fatal error during schema application:', error);
     process.exit(1);

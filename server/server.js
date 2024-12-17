@@ -50,14 +50,14 @@ app.get('/health', (req, res) => {
 });
 
 // Debug schema endpoint
-app.get('/debug/schema', async (req, res) => {
+app.get('/api/debug/schema', async (req, res) => {
   try {
     console.log('Checking database schema...');
     
     // List of tables we want to check
     const tables = [
-      'devices',
-      'readings',
+      'device_settings',
+      'device_data',
       'alert_settings',
       'alert_recipients',
       'alert_history',
@@ -126,8 +126,8 @@ app.get('/api/devices', async (req, res) => {
     console.log('SUPABASE_ANON_KEY exists:', !!process.env.SUPABASE_ANON_KEY);
     console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
     
-    // Get device settings
-    const { data: settings, error: settingsError } = await supabase
+    // Get all device settings
+    const { data: deviceSettings, error: settingsError } = await supabase
       .from('device_settings')
       .select('*');
 
@@ -142,16 +142,46 @@ app.get('/api/devices', async (req, res) => {
     if (dataError) throw dataError;
 
     // Combine settings and data
-    const devices = settings.map(device => {
+    const devices = deviceSettings.map(device => {
       const latestData = deviceData.find(d => d.icealert_id === device.icealert_id);
       return {
-        ...device,
+        id: device.id,
+        icealert_id: device.icealert_id,
+        name: device.device_name,
+        location: device.location,
+        part_number: device.part_number,
+        serial_number: device.serial_number,
         latest_readings: latestData ? {
           temperature: latestData.temperature,
           humidity: latestData.humidity,
           flow_rate: latestData.flow_rate,
           timestamp: latestData.created_at
-        } : null
+        } : null,
+        alert_settings: {
+          temperature: {
+            min: device.temperature_min,
+            max: device.temperature_max,
+            enabled: device.temperature_alert_enabled,
+            threshold: device.temperature_alert_threshold
+          },
+          humidity: {
+            min: device.humidity_min,
+            max: device.humidity_max,
+            enabled: device.humidity_alert_enabled,
+            threshold: device.humidity_alert_threshold
+          },
+          flow_rate: {
+            min: device.flow_rate_min,
+            max: device.flow_rate_max,
+            enabled: device.flow_rate_alert_enabled,
+            warning_hours: device.flow_rate_warning_hours,
+            critical_hours: device.flow_rate_critical_hours,
+            no_flow_minutes: device.no_flow_alert_minutes
+          },
+          email_alerts_enabled: device.email_alerts_enabled,
+          alert_frequency: device.alert_frequency
+        },
+        updated_at: device.updated_at
       };
     });
 
@@ -162,6 +192,151 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
+// Add endpoint to search by icealert_id
+app.get('/api/devices/by-icealert/:icealertId', async (req, res) => {
+  try {
+    const { icealertId } = req.params;
+    console.log('Device lookup by icealert_id:', {
+      icealertId,
+      headers: req.headers,
+      origin: req.headers.origin,
+      method: req.method,
+      path: req.path,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Get device settings
+    console.log('Querying device_settings table...');
+    const { data: deviceSettings, error: settingsError } = await supabase
+      .from('device_settings')
+      .select('*')
+      .eq('icealert_id', icealertId)
+      .single();
+
+    if (settingsError) {
+      console.error('Supabase query error (device_settings):', {
+        error: settingsError,
+        code: settingsError.code,
+        message: settingsError.message,
+        details: settingsError.details,
+        hint: settingsError.hint,
+        timestamp: new Date().toISOString()
+      });
+      throw settingsError;
+    }
+    
+    if (!deviceSettings) {
+      console.log('Device not found with icealert_id:', {
+        icealertId,
+        timestamp: new Date().toISOString()
+      });
+      return res.status(404).json({ 
+        error: 'Device not found',
+        details: {
+          searchId: icealertId,
+          searchType: 'icealert_id',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    console.log('Device settings found:', {
+      id: deviceSettings.id,
+      icealert_id: deviceSettings.icealert_id,
+      device_name: deviceSettings.device_name,
+      timestamp: new Date().toISOString()
+    });
+
+    // Get latest readings
+    console.log('Querying device_data table...');
+    const { data: readings, error: readingsError } = await supabase
+      .from('device_data')
+      .select('*')
+      .eq('icealert_id', icealertId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (readingsError && readingsError.code !== 'PGRST116') {
+      console.error('Supabase query error (device_data):', {
+        error: readingsError,
+        code: readingsError.code,
+        message: readingsError.message,
+        details: readingsError.details,
+        hint: readingsError.hint,
+        timestamp: new Date().toISOString()
+      });
+      throw readingsError;
+    }
+
+    console.log('Device readings found:', {
+      hasReadings: !!readings,
+      timestamp: readings?.created_at || new Date().toISOString()
+    });
+
+    // Format response to match the generic device endpoint
+    const response = {
+      id: deviceSettings.id,
+      icealert_id: deviceSettings.icealert_id,
+      device_name: deviceSettings.device_name,
+      location: deviceSettings.location,
+      part_number: deviceSettings.part_number,
+      serial_number: deviceSettings.serial_number,
+      temperature_min: deviceSettings.temperature_min,
+      temperature_max: deviceSettings.temperature_max,
+      humidity_min: deviceSettings.humidity_min,
+      humidity_max: deviceSettings.humidity_max,
+      flow_rate_min: deviceSettings.flow_rate_min,
+      flow_rate_max: deviceSettings.flow_rate_max,
+      flow_rate_warning_hours: deviceSettings.flow_rate_warning_hours,
+      flow_rate_critical_hours: deviceSettings.flow_rate_critical_hours,
+      email_alerts_enabled: deviceSettings.email_alerts_enabled,
+      temperature_alert_enabled: deviceSettings.temperature_alert_enabled,
+      temperature_alert_threshold: deviceSettings.temperature_alert_threshold,
+      humidity_alert_enabled: deviceSettings.humidity_alert_enabled,
+      humidity_alert_threshold: deviceSettings.humidity_alert_threshold,
+      flow_rate_alert_enabled: deviceSettings.flow_rate_alert_enabled,
+      no_flow_alert_minutes: deviceSettings.no_flow_alert_minutes,
+      alert_frequency: deviceSettings.alert_frequency,
+      latest_readings: readings ? {
+        temperature: readings.temperature,
+        humidity: readings.humidity,
+        flow_rate: readings.flow_rate,
+        timestamp: readings.created_at
+      } : null,
+      updated_at: deviceSettings.updated_at
+    };
+    
+    console.log('Response prepared:', {
+      id: response.id,
+      name: response.device_name,
+      icealert_id: response.icealert_id,
+      has_readings: !!response.latest_readings,
+      has_settings: true,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching device by icealert_id:', {
+      error: {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        stack: error.stack
+      },
+      timestamp: new Date().toISOString()
+    });
+    res.status(500).json({ 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Generic device endpoint
 app.get('/api/devices/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -199,70 +374,6 @@ app.get('/api/devices/:id', async (req, res) => {
     res.json(deviceInfo);
   } catch (error) {
     console.error('Error fetching device:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Add endpoint to search by icealert_id
-app.get('/api/devices/by-icealert/:icealertId', async (req, res) => {
-  try {
-    const { icealertId } = req.params;
-    console.log('Device lookup by icealert_id:', {
-      icealertId,
-      headers: req.headers,
-      origin: req.headers.origin,
-      method: req.method,
-      path: req.path
-    });
-    
-    const { data, error } = await supabase
-      .from('devices')
-      .select(`
-        *,
-        latest_readings (
-          temperature,
-          humidity,
-          flow_rate,
-          timestamp
-        ),
-        alert_settings (*)
-      `)
-      .eq('icealert_id', icealertId)
-      .single();
-
-    if (error) {
-      console.error('Supabase query error:', {
-        error,
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint
-      });
-      throw error;
-    }
-    
-    if (!data) {
-      console.log('Device not found with icealert_id:', icealertId);
-      return res.status(404).json({ 
-        error: 'Device not found',
-        details: {
-          searchId: icealertId,
-          searchType: 'icealert_id'
-        }
-      });
-    }
-    
-    console.log('Device found by icealert_id:', {
-      id: data.id,
-      name: data.name,
-      icealert_id: data.icealert_id,
-      has_readings: !!data.latest_readings,
-      has_settings: !!data.alert_settings
-    });
-    
-    res.json(data);
-  } catch (error) {
-    console.error('Error fetching device by icealert_id:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -507,6 +618,176 @@ app.get('/api/test-db', async (req, res) => {
     res.status(500).json({ 
       status: 'error',
       message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Test data endpoint
+app.get('/api/test-data', async (req, res) => {
+  try {
+    console.log('Testing data structure...');
+    
+    // Test device settings
+    const testSettings = {
+      id: 'test-uuid',
+      icealert_id: 'IA-2024-0001',
+      device_name: 'Test Ice Machine',
+      location: 'Test Kitchen',
+      part_number: 'TEST-123',
+      serial_number: 'SN-123',
+      temperature_min: 20.0,
+      temperature_max: 25.0,
+      humidity_min: 45.0,
+      humidity_max: 55.0,
+      flow_rate_min: 1.5,
+      flow_rate_max: 3.0,
+      flow_rate_warning_hours: 2,
+      flow_rate_critical_hours: 4,
+      email_alerts_enabled: true,
+      temperature_alert_enabled: true,
+      temperature_alert_threshold: 30.0,
+      humidity_alert_enabled: true,
+      humidity_alert_threshold: 60.0,
+      flow_rate_alert_enabled: true,
+      no_flow_alert_minutes: 30,
+      alert_frequency: 'immediate',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Test device data
+    const testData = {
+      id: 'test-reading-uuid',
+      icealert_id: 'IA-2024-0001',
+      temperature: 22.5,
+      temperature_timestamp: new Date().toISOString(),
+      humidity: 50.0,
+      humidity_timestamp: new Date().toISOString(),
+      flow_rate: 2.0,
+      flow_rate_timestamp: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+
+    // Format response like the device endpoint
+    const response = {
+      id: testSettings.id,
+      icealert_id: testSettings.icealert_id,
+      name: testSettings.device_name,
+      location: testSettings.location,
+      part_number: testSettings.part_number,
+      serial_number: testSettings.serial_number,
+      latest_readings: {
+        temperature: testData.temperature,
+        humidity: testData.humidity,
+        flow_rate: testData.flow_rate,
+        timestamp: testData.created_at
+      },
+      alert_settings: {
+        temperature: {
+          min: testSettings.temperature_min,
+          max: testSettings.temperature_max,
+          enabled: testSettings.temperature_alert_enabled,
+          threshold: testSettings.temperature_alert_threshold
+        },
+        humidity: {
+          min: testSettings.humidity_min,
+          max: testSettings.humidity_max,
+          enabled: testSettings.humidity_alert_enabled,
+          threshold: testSettings.humidity_alert_threshold
+        },
+        flow_rate: {
+          min: testSettings.flow_rate_min,
+          max: testSettings.flow_rate_max,
+          enabled: testSettings.flow_rate_alert_enabled,
+          warning_hours: testSettings.flow_rate_warning_hours,
+          critical_hours: testSettings.flow_rate_critical_hours,
+          no_flow_minutes: testSettings.no_flow_alert_minutes
+        },
+        email_alerts_enabled: testSettings.email_alerts_enabled,
+        alert_frequency: testSettings.alert_frequency
+      },
+      updated_at: testSettings.updated_at
+    };
+
+    console.log('Test data structure:', {
+      hasSettings: true,
+      hasReadings: true,
+      settingsFields: Object.keys(testSettings),
+      dataFields: Object.keys(testData),
+      responseFields: Object.keys(response),
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      status: 'ok',
+      message: 'Test data structure generated successfully',
+      raw: {
+        settings: testSettings,
+        data: testData
+      },
+      formatted: response,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error generating test data:', error);
+    res.status(500).json({ 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Device settings endpoint
+app.post('/api/devices/settings', async (req, res) => {
+  try {
+    const settings = req.body;
+    console.log('Creating device settings:', {
+      icealert_id: settings.icealert_id,
+      device_name: settings.device_name,
+      timestamp: new Date().toISOString()
+    });
+
+    // Add timestamps
+    settings.created_at = new Date().toISOString();
+    settings.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('device_settings')
+      .insert([settings])
+      .select();
+
+    if (error) {
+      console.error('Error creating device settings:', {
+        error,
+        settings,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
+
+    console.log('Device settings created:', {
+      id: data[0].id,
+      icealert_id: data[0].icealert_id,
+      device_name: data[0].device_name,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json(data[0]);
+  } catch (error) {
+    console.error('Error in device settings endpoint:', {
+      error: {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        stack: error.stack
+      },
+      timestamp: new Date().toISOString()
+    });
+    res.status(500).json({ 
+      error: error.message,
       timestamp: new Date().toISOString()
     });
   }

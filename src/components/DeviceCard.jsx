@@ -5,20 +5,19 @@ import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 const DeviceCard = ({ 
   name, 
   location, 
-  partNumber,
-  serialNumber,
-  iceAlertSerial,
-  temperature, 
-  humidity, 
-  flowRate,
-  lastFlowDetection,
-  lastUpdated 
+  part_number: partNumber,
+  serial_number: serialNumber,
+  icealert_id: iceAlertId,
+  latest_readings: latestReadings,
+  last_updated: lastUpdated 
 }) => {
   const navigate = useNavigate();
 
-  // Parse values from strings
-  const tempValue = parseFloat(temperature.replace(/[^\d.-]/g, ''));
-  const humidityValue = parseFloat(humidity.replace(/[^\d.-]/g, ''));
+  // Parse values from latest readings
+  const tempValue = latestReadings?.temperature ? parseFloat(latestReadings.temperature) : 0;
+  const humidityValue = latestReadings?.humidity ? parseFloat(latestReadings.humidity) : 0;
+  const flowRateValue = latestReadings?.flow_rate ? parseFloat(latestReadings.flow_rate) : 0;
+  const lastFlowDetection = latestReadings?.timestamp || new Date().toISOString();
   const hoursSinceFlow = Math.round((Date.now() - new Date(lastFlowDetection).getTime()) / (1000 * 60 * 60));
 
   // Define normal ranges
@@ -76,17 +75,17 @@ const DeviceCard = ({
   };
 
   const handleCardClick = () => {
-    navigate(`/device/${iceAlertSerial}`, {
+    navigate(`/devices/by-icealert/${iceAlertId}`, {
       state: {
         deviceDetails: {
           name,
           location,
           partNumber,
           serialNumber,
-          iceAlertSerial,
-          temperature,
-          humidity,
-          flowRate,
+          iceAlertId,
+          temperature: `${tempValue}°C`,
+          humidity: `${humidityValue}%`,
+          flowRate: `${flowRateValue} L/min`,
           lastFlowDetection,
           lastUpdated
         }
@@ -116,7 +115,7 @@ const DeviceCard = ({
           <span className="text-[10px] text-gray-400">|</span>
           <div className="flex items-center gap-1">
             <span className="text-blue-600 text-[10px] font-semibold">IceAlert:</span>
-            <span className="text-[10px] text-gray-600">{iceAlertSerial}</span>
+            <span className="text-[10px] text-gray-600">{iceAlertId}</span>
           </div>
         </div>
         <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${statusStyles[status]}`}>
@@ -131,14 +130,14 @@ const DeviceCard = ({
           <span>SN: {serialNumber}</span>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-1.5">
         <div className="flex items-start gap-1">
           <span className="text-sm mt-0.5">🌡️</span>
           <div className="w-full">
             <p className="text-gray-600 text-[10px] leading-tight">Temperature</p>
             <p className={`font-bold text-xs leading-tight ${getMetricTextColor(tempValue, TEMP_MIN, TEMP_MAX)}`}>
-              {temperature}
+              {tempValue}°C
             </p>
             <p className="text-[8px] text-gray-500 leading-tight">Normal: {TEMP_MIN}°C - {TEMP_MAX}°C</p>
             <div className="h-8 mt-0.5">
@@ -154,7 +153,7 @@ const DeviceCard = ({
           <span className="text-sm mt-0.5">🌊</span>
           <div className="w-full">
             <p className="text-gray-600 text-[10px] leading-tight">Last Flow Rate</p>
-            <p className="font-bold text-xs leading-tight">{flowRate}</p>
+            <p className="font-bold text-xs leading-tight">{flowRateValue} L/min</p>
             <p className="text-[8px] text-gray-500 leading-tight">
               at {new Date(lastFlowDetection).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
@@ -172,7 +171,7 @@ const DeviceCard = ({
           <div className="w-full">
             <p className="text-gray-600 text-[10px] leading-tight">Humidity</p>
             <p className={`font-bold text-xs leading-tight ${getMetricTextColor(humidityValue, HUMIDITY_MIN, HUMIDITY_MAX)}`}>
-              {humidity}
+              {humidityValue}%
             </p>
             <p className="text-[8px] text-gray-500 leading-tight">Normal: {HUMIDITY_MIN}% - {HUMIDITY_MAX}%</p>
             <div className="h-8 mt-0.5">

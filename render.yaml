@@ -6,31 +6,25 @@ services:
     buildCommand: |
       cd server
       npm install
-      echo "Running schema application..."
-      export SUPABASE_URL=https://xxdjtvevvszefsvgjwye.supabase.co
-      export SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNDE3NDg1OSwiZXhwIjoyMDQ5NzUwODU5fQ.Qbwr5OqyCUiw-fCZG3dx6pSKXDrqi1PObiIiJlpJqgc
-      echo "Waiting for environment variables to propagate..."
-      sleep 5
-      echo "Applying schema and migrations..."
-      node apply-schema.js || exit 1
-      echo "Schema and migrations application completed"
     startCommand: |
       cd server
+      echo "Applying schema and migrations..."
+      node apply-schema.js &&
       echo "Starting server..."
       node server.js
     envVars:
       - key: PORT
         value: 3001
       - key: SUPABASE_URL
-        value: https://xxdjtvevvszefsvgjwye.supabase.co
+        sync: false
       - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQxNzQ4NTksImV4cCI6MjA0OTc1MDg1OX0.g4mULV_tFw_W6L_Iy1GxJuYm1O_tUt30Wuu7R1aNLuo
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
       - key: CORS_ORIGIN
         value: https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app
       - key: NODE_ENV
         value: production
-      - key: SUPABASE_SERVICE_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNDE3NDg1OSwiZXhwIjoyMDQ5NzUwODU5fQ.Qbwr5OqyCUiw-fCZG3dx6pSKXDrqi1PObiIiJlpJqgc
 
 databases:
   - name: ice-alert-db

@@ -1,5 +1,23 @@
+-- Create exec_sql function for schema management
+CREATE OR REPLACE FUNCTION exec_sql(query text)
+RETURNS text AS $func$
+BEGIN
+    EXECUTE query;
+    RETURN 'OK';
+END;
+$func$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION update_device_settings_updated_at()
+RETURNS TRIGGER AS $func$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$func$ language 'plpgsql';
 
 -- Create device_settings table
 CREATE TABLE IF NOT EXISTS device_settings (
@@ -42,14 +60,30 @@ CREATE TABLE IF NOT EXISTS device_data (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create alert_history table
+CREATE TABLE IF NOT EXISTS alert_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id VARCHAR(255) REFERENCES device_settings(icealert_id),
+    alert_type VARCHAR(50) NOT NULL,
+    message TEXT,
+    value NUMERIC(5,2),
+    threshold VARCHAR(50),
+    sent_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    acknowledged_at TIMESTAMPTZ,
+    acknowledged_by VARCHAR(255)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_device_data_icealert_id ON device_data(icealert_id);
 CREATE INDEX IF NOT EXISTS idx_device_data_created_at ON device_data(created_at);
 CREATE INDEX IF NOT EXISTS idx_device_settings_icealert_id ON device_settings(icealert_id);
+CREATE INDEX IF NOT EXISTS idx_alert_history_device_id ON alert_history(device_id);
+CREATE INDEX IF NOT EXISTS idx_alert_history_sent_at ON alert_history(sent_at);
 
 -- Enable Row Level Security
 ALTER TABLE device_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE device_data ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_history ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
 CREATE POLICY "Enable read access for all users" ON device_settings
@@ -58,26 +92,25 @@ CREATE POLICY "Enable read access for all users" ON device_settings
 CREATE POLICY "Enable read access for all users" ON device_data
     FOR SELECT USING (true);
 
+CREATE POLICY "Enable read access for all users" ON alert_history
+    FOR SELECT USING (true);
+
 CREATE POLICY "Enable insert for authenticated users only" ON device_settings
     FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 CREATE POLICY "Enable insert for authenticated users only" ON device_data
     FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
+CREATE POLICY "Enable insert for authenticated users only" ON alert_history
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
 -- Enable realtime subscriptions
 ALTER PUBLICATION supabase_realtime ADD TABLE device_settings;
 ALTER PUBLICATION supabase_realtime ADD TABLE device_data;
-
--- Create updated_at trigger function
-CREATE OR REPLACE FUNCTION update_device_settings_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
+ALTER PUBLICATION supabase_realtime ADD TABLE alert_history;
 
 -- Add trigger for device_settings
+DROP TRIGGER IF EXISTS update_device_settings_updated_at ON device_settings;
 CREATE TRIGGER update_device_settings_updated_at
     BEFORE UPDATE ON device_settings
     FOR EACH ROW
