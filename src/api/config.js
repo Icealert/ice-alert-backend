@@ -1,11 +1,11 @@
 // Get the API URL from environment variables with proper fallbacks
 const API_BASE_URL = import.meta.env.VITE_API_URL || (
   import.meta.env.MODE === 'production'
-    ? 'https://ice-alert-backend.onrender.com/api'
-    : 'http://localhost:3001/api'
+    ? 'https://ice-alert-backend.onrender.com'
+    : 'http://localhost:3001'
 );
 
-// Remove trailing /api if it exists in the environment variable
+// Ensure URL ends with /api
 const normalizedURL = API_BASE_URL.endsWith('/api') 
   ? API_BASE_URL
   : `${API_BASE_URL}/api`;
@@ -43,7 +43,8 @@ export const API_CONFIG = {
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'Access-Control-Allow-Origin': '*'
   }
 };
 

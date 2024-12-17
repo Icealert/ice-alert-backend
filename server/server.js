@@ -10,27 +10,38 @@ const allowedOrigins = [
   'https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app',
   'https://ice-alert-frontend1.vercel.app',
   'http://localhost:3000',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'http://localhost:4173', // Vite preview
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:4173'
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     // Allow all vercel.app subdomains and specific origins
-    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+    if (
+      origin.endsWith('.vercel.app') || 
+      allowedOrigins.includes(origin) ||
+      process.env.NODE_ENV === 'development'
+    ) {
       return callback(null, true);
     }
     
+    console.log('CORS blocked for origin:', origin);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   optionsSuccessStatus: 200,
   maxAge: 86400 // Cache preflight request for 24 hours
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Health check endpoint
