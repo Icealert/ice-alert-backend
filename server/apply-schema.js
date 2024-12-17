@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 console.log('Initializing schema application...');
@@ -8,18 +9,36 @@ console.log('Environment check:');
 console.log('- SUPABASE_URL:', process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing');
 console.log('- SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? '✓ Set' : '✗ Missing');
 
-// Initialize Supabase client with service role key
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY,
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true
+async function executeSQL(statement) {
+  const url = `${process.env.SUPABASE_URL}/rest/v1/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        'apikey': process.env.SUPABASE_SERVICE_KEY,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        query: statement
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(JSON.stringify(error));
     }
+
+    return await response.json();
+  } catch (error) {
+    if (error.message.includes('already exists')) {
+      console.log('Object already exists, continuing...');
+      return null;
+    }
+    throw error;
   }
-);
+}
 
 async function applySchema() {
   try {
@@ -46,23 +65,9 @@ async function applySchema() {
       try {
         console.log('\nExecuting statement:', statement.substring(0, 100) + '...');
         
-        // Execute the SQL statement directly using service role
-        const { data, error } = await supabase.auth.admin.executeRawQuery(statement);
-
-        if (error) {
-          console.error('Error executing statement:', error);
-          if (!error.message.includes('already exists')) {
-            errorCount++;
-            console.error('Statement failed:', statement);
-            console.error('Error details:', error);
-          } else {
-            console.log('Table/Index already exists, continuing...');
-            successCount++;
-          }
-        } else {
-          console.log('Statement executed successfully');
-          successCount++;
-        }
+        await executeSQL(statement);
+        console.log('Statement executed successfully');
+        successCount++;
       } catch (error) {
         console.error('Error executing statement:', error);
         if (!error.message.includes('already exists')) {
@@ -70,7 +75,7 @@ async function applySchema() {
           console.error('Statement failed:', statement);
           console.error('Error details:', error);
         } else {
-          console.log('Table/Index already exists, continuing...');
+          console.log('Object already exists, continuing...');
           successCount++;
         }
       }
