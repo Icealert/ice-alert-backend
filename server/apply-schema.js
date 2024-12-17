@@ -5,20 +5,24 @@ const fetch = require('node-fetch');
 require('dotenv').config();
 
 console.log('Initializing schema application...');
+
+const supabaseUrl = 'https://xxdjtvevvszefsvgjwye.supabase.co';
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNDE3NDg1OSwiZXhwIjoyMDQ5NzUwODU5fQ.Qbwr5OqyCUiw-fCZG3dx6pSKXDrqi1PObiIiJlpJqgc';
+
 console.log('Environment check:');
-console.log('- SUPABASE_URL:', process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing');
-console.log('- SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? '✓ Set' : '✗ Missing');
+console.log('- SUPABASE_URL:', supabaseUrl ? '✓ Set' : '✗ Missing');
+console.log('- SUPABASE_SERVICE_KEY:', supabaseServiceKey ? '✓ Set' : '✗ Missing');
 
 async function executeSQL(statement) {
-  const url = `${process.env.SUPABASE_URL}/rest/v1/rpc/exec_sql`;
+  const url = `${supabaseUrl}/rest/v1/rpc/exec_sql`;
   try {
     console.log(`Executing SQL at ${url}`);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-        'apikey': process.env.SUPABASE_SERVICE_KEY
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'apikey': supabaseServiceKey
       },
       body: JSON.stringify({
         sql_query: statement
