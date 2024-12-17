@@ -2,8 +2,8 @@ const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = 'https://xxdjtvevvszefsvgjwye.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 
 console.log('Initializing Supabase connection...');
 // Log the full URL but mask the middle part for security
@@ -28,7 +28,7 @@ if (supabaseUrl) {
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase credentials:',
     !supabaseUrl ? 'SUPABASE_URL is missing' : '',
-    !supabaseKey ? 'SUPABASE_ANON_KEY is missing' : ''
+    !supabaseKey ? 'SUPABASE_KEY is missing' : ''
   );
   throw new Error('Missing Supabase credentials');
 }
