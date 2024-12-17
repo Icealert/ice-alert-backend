@@ -9,7 +9,10 @@ services:
       echo "Running schema application..."
       export SUPABASE_URL=https://xxdjtvevvszefsvgjwye.supabase.co
       export SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNDE3NDg1OSwiZXhwIjoyMDQ5NzUwODU5fQ.Qbwr5OqyCUiw-fCZG3dx6pSKXDrqi1PObiIiJlpJqgc
+      echo "Waiting for environment variables to propagate..."
+      sleep 5
       node apply-schema.js || exit 1
+      echo "Schema application completed"
     startCommand: |
       cd server
       echo "Starting server..."

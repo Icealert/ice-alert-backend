@@ -10,32 +10,39 @@ console.log('- SUPABASE_URL:', process.env.SUPABASE_URL ? '✓ Set' : '✗ Missi
 console.log('- SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? '✓ Set' : '✗ Missing');
 
 async function executeSQL(statement) {
-  const url = `${process.env.SUPABASE_URL}/rest/v1/`;
+  const url = `${process.env.SUPABASE_URL}/rest/v1/rpc/exec_sql`;
   try {
+    console.log(`Executing SQL at ${url}`);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-        'apikey': process.env.SUPABASE_SERVICE_KEY,
-        'Prefer': 'resolution=merge-duplicates'
+        'apikey': process.env.SUPABASE_SERVICE_KEY
       },
       body: JSON.stringify({
-        query: statement
+        sql_query: statement
       })
     });
 
+    const responseText = await response.text();
+    console.log('Response:', responseText);
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(JSON.stringify(error));
+      if (responseText.includes('already exists')) {
+        console.log('Object already exists, continuing...');
+        return null;
+      }
+      throw new Error(`SQL execution failed: ${responseText}`);
     }
 
-    return await response.json();
+    return responseText ? JSON.parse(responseText) : null;
   } catch (error) {
     if (error.message.includes('already exists')) {
       console.log('Object already exists, continuing...');
       return null;
     }
+    console.error('SQL execution error:', error);
     throw error;
   }
 }
@@ -63,7 +70,7 @@ async function applySchema() {
     console.log('\nApplying schema changes...');
     for (const statement of statements) {
       try {
-        console.log('\nExecuting statement:', statement.substring(0, 100) + '...');
+        console.log('\nExecuting statement:', statement);
         
         await executeSQL(statement);
         console.log('Statement executed successfully');
@@ -86,6 +93,24 @@ async function applySchema() {
 
     if (errorCount > 0) {
       throw new Error(`Schema application completed with ${errorCount} errors`);
+    }
+
+    // Verify tables were created
+    console.log('\nVerifying schema...');
+    const verificationStatements = [
+      'SELECT COUNT(*) FROM device_settings',
+      'SELECT COUNT(*) FROM device_data'
+    ];
+
+    for (const statement of verificationStatements) {
+      try {
+        console.log(`Executing verification: ${statement}`);
+        const result = await executeSQL(statement);
+        console.log('Verification result:', result);
+      } catch (error) {
+        console.error('Verification failed:', error);
+        throw error;
+      }
     }
 
   } catch (error) {
