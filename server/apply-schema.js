@@ -1,7 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch');
 require('dotenv').config();
 
 console.log('Initializing schema application...');
@@ -13,34 +12,31 @@ console.log('Environment check:');
 console.log('- SUPABASE_URL:', supabaseUrl ? '✓ Set' : '✗ Missing');
 console.log('- SUPABASE_SERVICE_KEY:', supabaseServiceKey ? '✓ Set' : '✗ Missing');
 
+// Initialize Supabase client
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
+
 async function executeSQL(statement) {
-  const url = `${supabaseUrl}/rest/v1/rpc/exec_sql`;
   try {
-    console.log(`Executing SQL at ${url}`);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`,
-        'apikey': supabaseServiceKey
-      },
-      body: JSON.stringify({
-        sql_query: statement
-      })
+    console.log('Executing statement:', statement);
+    const { data, error } = await supabase.rpc('exec_sql', {
+      query: statement
     });
 
-    const responseText = await response.text();
-    console.log('Response:', responseText);
-
-    if (!response.ok) {
-      if (responseText.includes('already exists')) {
+    if (error) {
+      if (error.message.includes('already exists')) {
         console.log('Object already exists, continuing...');
         return null;
       }
-      throw new Error(`SQL execution failed: ${responseText}`);
+      throw error;
     }
 
-    return responseText ? JSON.parse(responseText) : null;
+    return data;
   } catch (error) {
     if (error.message.includes('already exists')) {
       console.log('Object already exists, continuing...');
@@ -74,8 +70,6 @@ async function applySchema() {
     console.log('\nApplying schema changes...');
     for (const statement of statements) {
       try {
-        console.log('\nExecuting statement:', statement);
-        
         await executeSQL(statement);
         console.log('Statement executed successfully');
         successCount++;
