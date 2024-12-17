@@ -3,8 +3,17 @@ services:
     name: ice-alert-backend
     env: node
     region: ohio
-    buildCommand: cd server && npm install && npm run apply-schema
-    startCommand: cd server && node server.js
+    buildCommand: |
+      cd server
+      npm install
+      echo "Running schema application..."
+      node apply-schema.js || exit 1
+    startCommand: |
+      cd server
+      echo "Verifying schema..."
+      node apply-schema.js
+      echo "Starting server..."
+      node server.js
     envVars:
       - key: PORT
         value: 3001
@@ -16,8 +25,10 @@ services:
         value: https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app
       - key: NODE_ENV
         value: production
+      - key: SUPABASE_SERVICE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNDE3NDg1OSwiZXhwIjoyMDQ5NzUwODU5fQ.Qbwr5OqyCUiw-fCZG3dx6pSKXDrqi1PObiIiJlpJqgc
 
 databases:
   - name: ice-alert-db
     plan: free
-    ipAllowList: [] 
+    ipAllowList: []
