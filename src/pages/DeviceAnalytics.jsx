@@ -5,7 +5,7 @@ import API_BASE_URL from '../api/config';
 import deviceService from '../api/deviceService';
 
 const DeviceAnalytics = () => {
-  const { deviceId } = useParams();
+  const { icealertId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const [deviceDetails, setDeviceDetails] = useState(location.state?.deviceDetails);
@@ -240,13 +240,15 @@ const DeviceAnalytics = () => {
 
       // Save alert settings to backend
       const alertSettings = {
+        icealert_id: icealertId,
         enabled: settingsForm.alerts.enabled,
         recipients: settingsForm.alerts.recipients.filter(email => email.trim()),
         conditions: settingsForm.alerts.conditions,
-        combinationAlerts: settingsForm.alerts.combinationAlerts
+        combinationAlerts: settingsForm.alerts.combinationAlerts,
+        normalRanges: updatedRanges
       };
 
-      await deviceService.updateAlertSettings(deviceId, alertSettings);
+      await deviceService.updateAlertSettings(icealertId, alertSettings);
 
       // Force re-generation of data with new ranges
       const newData = {
@@ -290,7 +292,7 @@ const DeviceAnalytics = () => {
           flowRate: historicalData.flowRate[historicalData.flowRate.length - 1]?.flowRate
         };
 
-        const response = await fetch(`http://localhost:3001/api/alerts/check/${deviceId}`, {
+        const response = await fetch(`http://localhost:3001/api/alerts/check/${icealertId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1204,7 +1206,7 @@ const DeviceAnalytics = () => {
 
   const fetchDeviceData = async () => {
     try {
-      const data = await deviceService.getDevice(deviceId);
+      const data = await deviceService.getDeviceByIceAlertId(icealertId);
       setDeviceDetails(data);
     } catch (error) {
       console.error('Error fetching device data:', error);
@@ -1213,7 +1215,7 @@ const DeviceAnalytics = () => {
 
   const fetchReadings = async () => {
     try {
-      const data = await deviceService.getReadings(deviceId, timeRange);
+      const data = await deviceService.getDeviceReadings(icealertId, timeRange);
       setReadings(data);
     } catch (error) {
       console.error('Error fetching readings:', error);
@@ -1222,7 +1224,7 @@ const DeviceAnalytics = () => {
 
   const fetchAlertSettings = async () => {
     try {
-      const data = await deviceService.getAlertSettings(deviceId);
+      const data = await deviceService.getAlertSettings(icealertId);
       setAlertSettings(data);
     } catch (error) {
       console.error('Error fetching alert settings:', error);
@@ -1235,7 +1237,7 @@ const DeviceAnalytics = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await deviceService.getDevice(deviceId);
+        const data = await deviceService.getDeviceByIceAlertId(icealertId);
         setDeviceDetails(data);
       } catch (error) {
         console.error('Error fetching device data:', error);
@@ -1253,7 +1255,7 @@ const DeviceAnalytics = () => {
     if (!location.state?.deviceDetails) {
       fetchData();
     }
-  }, [deviceId, navigate, location.state]);
+  }, [icealertId, navigate, location.state]);
 
   if (loading) {
     return (

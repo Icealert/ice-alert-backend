@@ -134,10 +134,10 @@ const deviceService = {
   },
 
   // Get device readings
-  async getDeviceReadings(deviceId, hours = 24) {
+  async getDeviceReadings(icealertId, hours = 24) {
     try {
-      console.log('Fetching readings for device:', deviceId, 'hours:', hours);
-      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/readings`, {
+      console.log('Fetching readings for device:', icealertId, 'hours:', hours);
+      const response = await api.get(`/devices/by-icealert/${encodeURIComponent(icealertId)}/readings`, {
         params: { hours }
       });
       return response.data;
@@ -160,10 +160,10 @@ const deviceService = {
   },
 
   // Get alert settings
-  async getAlertSettings(deviceId) {
+  async getAlertSettings(icealertId) {
     try {
-      console.log('Fetching alert settings for device:', deviceId);
-      const response = await api.get(`/devices/${encodeURIComponent(deviceId)}/alerts`);
+      console.log('Fetching alert settings for device:', icealertId);
+      const response = await api.get(`/devices/by-icealert/${encodeURIComponent(icealertId)}/alerts`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch alert settings:', error);
@@ -172,10 +172,10 @@ const deviceService = {
   },
 
   // Update alert settings
-  async updateAlertSettings(deviceId, settings) {
+  async updateAlertSettings(icealertId, settings) {
     try {
-      console.log('Updating alert settings for device:', deviceId, settings);
-      const response = await api.put(`/devices/${encodeURIComponent(deviceId)}/alerts`, settings);
+      console.log('Updating alert settings for device:', icealertId, settings);
+      const response = await api.put(`/devices/by-icealert/${encodeURIComponent(icealertId)}/alerts`, settings);
       return response.data;
     } catch (error) {
       console.error('Failed to update alert settings:', error);
