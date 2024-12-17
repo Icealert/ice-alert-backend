@@ -9,31 +9,15 @@ const app = express();
 app.use(cors({
   origin: [
     'https://ice-alert-frontend1.vercel.app',
-    'https://ice-alert-frontend1-ctjorrdtc-icealerts-projects.vercel.app',
     'https://aaaa-arduino-proj-9ievnvz20-icealerts-projects.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
   credentials: true,
-  optionsSuccessStatus: 200,
-  preflightContinue: false
+  optionsSuccessStatus: 200
 }));
-
-// Add headers middleware for preflight requests
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Max-Age', '86400');
-  }
-  next();
-});
-
 app.use(express.json());
 
 // Health check endpoint
@@ -174,6 +158,70 @@ app.get('/api/devices/:id', async (req, res) => {
     res.json(data);
   } catch (error) {
     console.error('Error fetching device:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add endpoint to search by icealert_id
+app.get('/api/devices/by-icealert/:icealertId', async (req, res) => {
+  try {
+    const { icealertId } = req.params;
+    console.log('Device lookup by icealert_id:', {
+      icealertId,
+      headers: req.headers,
+      origin: req.headers.origin,
+      method: req.method,
+      path: req.path
+    });
+    
+    const { data, error } = await supabase
+      .from('devices')
+      .select(`
+        *,
+        latest_readings (
+          temperature,
+          humidity,
+          flow_rate,
+          timestamp
+        ),
+        alert_settings (*)
+      `)
+      .eq('icealert_id', icealertId)
+      .single();
+
+    if (error) {
+      console.error('Supabase query error:', {
+        error,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error;
+    }
+    
+    if (!data) {
+      console.log('Device not found with icealert_id:', icealertId);
+      return res.status(404).json({ 
+        error: 'Device not found',
+        details: {
+          searchId: icealertId,
+          searchType: 'icealert_id'
+        }
+      });
+    }
+    
+    console.log('Device found by icealert_id:', {
+      id: data.id,
+      name: data.name,
+      icealert_id: data.icealert_id,
+      has_readings: !!data.latest_readings,
+      has_settings: !!data.alert_settings
+    });
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching device by icealert_id:', error);
     res.status(500).json({ error: error.message });
   }
 });
