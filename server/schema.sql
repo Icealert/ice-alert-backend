@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS device_settings (
     flow_rate_alert_enabled BOOL DEFAULT true,
     no_flow_alert_minutes INT4 DEFAULT 30,
     alert_frequency VARCHAR(50) DEFAULT 'immediate',
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create device_data table
@@ -66,3 +67,18 @@ CREATE POLICY "Enable insert for authenticated users only" ON device_data
 -- Enable realtime subscriptions
 ALTER PUBLICATION supabase_realtime ADD TABLE device_settings;
 ALTER PUBLICATION supabase_realtime ADD TABLE device_data;
+
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION update_device_settings_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Add trigger for device_settings
+CREATE TRIGGER update_device_settings_updated_at
+    BEFORE UPDATE ON device_settings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_device_settings_updated_at();

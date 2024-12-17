@@ -5,8 +5,8 @@ require('dotenv').config();
 
 console.log('Initializing schema application...');
 
-const supabaseUrl = 'https://xxdjtvevvszefsvgjwye.supabase.co';
-const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNDE3NDg1OSwiZXhwIjoyMDQ5NzUwODU5fQ.Qbwr5OqyCUiw-fCZG3dx6pSKXDrqi1PObiIiJlpJqgc';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 
 console.log('Environment check:');
 console.log('- SUPABASE_URL:', supabaseUrl ? '✓ Set' : '✗ Missing');
@@ -49,55 +49,40 @@ async function executeSQL(statement) {
 
 async function applySchema() {
   try {
-    console.log('Reading schema file...');
+    console.log('Starting schema application...');
+
+    // Read and execute schema.sql
     const schemaPath = path.join(__dirname, 'schema.sql');
-    console.log('Schema file path:', schemaPath);
+    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
     
-    const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
-    console.log('Schema file read successfully');
+    console.log('Applying base schema...');
+    await executeSQL(schemaSql);
 
-    // Split the schema into individual statements
-    const statements = schemaSQL
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    // Read and execute migrations
+    const migrationsDir = path.join(__dirname, 'migrations');
+    if (fs.existsSync(migrationsDir)) {
+      const migrationFiles = fs.readdirSync(migrationsDir)
+        .filter(file => file.endsWith('.sql'))
+        .sort(); // Execute migrations in alphabetical order
 
-    console.log(`Found ${statements.length} SQL statements to execute`);
+      console.log('Found migration files:', migrationFiles);
 
-    let successCount = 0;
-    let errorCount = 0;
-
-    console.log('\nApplying schema changes...');
-    for (const statement of statements) {
-      try {
-        await executeSQL(statement);
-        console.log('Statement executed successfully');
-        successCount++;
-      } catch (error) {
-        console.error('Error executing statement:', error);
-        if (!error.message.includes('already exists')) {
-          errorCount++;
-          console.error('Statement failed:', statement);
-          console.error('Error details:', error);
-        } else {
-          console.log('Object already exists, continuing...');
-          successCount++;
-        }
+      for (const migrationFile of migrationFiles) {
+        console.log(`Applying migration: ${migrationFile}`);
+        const migrationPath = path.join(migrationsDir, migrationFile);
+        const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+        await executeSQL(migrationSql);
       }
+    } else {
+      console.log('No migrations directory found');
     }
 
-    console.log('\nSchema application completed!');
-    console.log(`Results: ${successCount} successful, ${errorCount} failed`);
-
-    if (errorCount > 0) {
-      throw new Error(`Schema application completed with ${errorCount} errors`);
-    }
-
-    // Verify tables were created
+    // Verify schema
     console.log('\nVerifying schema...');
     const verificationStatements = [
       'SELECT COUNT(*) FROM device_settings',
-      'SELECT COUNT(*) FROM device_data'
+      'SELECT COUNT(*) FROM device_data',
+      "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'device_settings'"
     ];
 
     for (const statement of verificationStatements) {
@@ -111,6 +96,7 @@ async function applySchema() {
       }
     }
 
+    console.log('Schema application completed successfully');
   } catch (error) {
     console.error('Fatal error during schema application:', error);
     process.exit(1);
@@ -118,13 +104,7 @@ async function applySchema() {
 }
 
 // Run the schema application
-console.log('Starting schema application...');
-applySchema()
-  .then(() => {
-    console.log('Schema application completed successfully');
-    process.exit(0);
-  })
-  .catch(error => {
-    console.error('Schema application failed:', error);
-    process.exit(1);
-  }); 
+applySchema().catch(error => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+}); 
