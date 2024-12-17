@@ -3,7 +3,7 @@ services:
     name: ice-alert-backend
     env: node
     region: ohio
-    buildCommand: cd server && npm install
+    buildCommand: cd server && npm install && npm run apply-schema
     startCommand: cd server && node server.js
     envVars:
       - key: PORT
