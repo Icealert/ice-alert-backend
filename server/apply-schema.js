@@ -6,7 +6,14 @@ require('dotenv').config();
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true
+    }
+  }
 );
 
 async function applySchema() {
@@ -22,18 +29,40 @@ async function applySchema() {
 
     console.log('Applying schema changes...');
     for (const statement of statements) {
-      console.log('\nExecuting statement:', statement.substring(0, 100) + '...');
-      const { error } = await supabase.rpc('exec_sql', {
-        sql_query: statement + ';'
-      });
+      try {
+        console.log('\nExecuting statement:', statement.substring(0, 100) + '...');
+        
+        // Execute the SQL statement directly
+        const { data, error } = await supabase
+          .from('schema_migrations')
+          .select('*')
+          .limit(1)
+          .single();
 
-      if (error) {
+        if (error && error.code === '42P01') {
+          // Table doesn't exist, create it
+          await supabase.from('schema_migrations').insert([
+            { version: '1', applied_at: new Date().toISOString() }
+          ]);
+        }
+
+        // Execute the actual schema statement
+        const { error: queryError } = await supabase.auth.admin.executeSql(statement);
+
+        if (queryError) {
+          console.error('Error executing statement:', queryError);
+          if (!queryError.message.includes('already exists')) {
+            throw queryError;
+          }
+        } else {
+          console.log('Statement executed successfully');
+        }
+      } catch (error) {
         console.error('Error executing statement:', error);
-        // Continue with other statements
-        continue;
+        if (!error.message.includes('already exists')) {
+          throw error;
+        }
       }
-
-      console.log('Statement executed successfully');
     }
 
     console.log('\nSchema application completed!');
