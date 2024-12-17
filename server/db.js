@@ -52,7 +52,7 @@ console.log('Supabase client created successfully');
 async function testConnection() {
   try {
     console.log('Testing Supabase connection...');
-    const { data, error } = await supabase.from('devices').select('count');
+    const { data, error } = await supabase.from('device_settings').select('count');
     if (error) {
       console.error('Supabase query error:', {
         message: error.message,
