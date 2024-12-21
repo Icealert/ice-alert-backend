@@ -29,7 +29,13 @@ const ChartComponent = ({
   title,
   color,
   unit,
-  stats = {},
+  stats = {
+    min: null,
+    max: null,
+    avg: null,
+    trend: 0,
+    normalRange: { min: 0, max: 100 }
+  },
   isInRange,
   timeRange,
   onTimeRangeChange
@@ -42,9 +48,9 @@ const ChartComponent = ({
   const lastValue = lastDataPoint ? safeParseFloat(lastDataPoint[metric]) : null;
 
   // Get normal range values safely
-  const normalRange = stats?.normalRange || {};
-  const minValue = safeParseFloat(normalRange.min);
-  const maxValue = safeParseFloat(normalRange.max);
+  const normalRange = stats?.normalRange || { min: 0, max: 100 };
+  const minValue = safeParseFloat(normalRange.min) ?? 0;
+  const maxValue = safeParseFloat(normalRange.max) ?? 100;
 
   // Format the timestamp for display
   const formatTimestamp = (timestamp) => {
@@ -81,8 +87,8 @@ const ChartComponent = ({
     const values = safeData.map(item => safeParseFloat(item[metric])).filter(Boolean);
     if (!values.length) return [0, 100];
     
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    const min = Math.min(...values, minValue);
+    const max = Math.max(...values, maxValue);
     const padding = (max - min) * 0.1;
     
     return [Math.max(0, min - padding), max + padding];
@@ -148,20 +154,16 @@ const ChartComponent = ({
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
               />
-              {minValue !== null && (
-                <ReferenceLine
-                  y={minValue}
-                  stroke="#cbd5e1"
-                  strokeDasharray="3 3"
-                />
-              )}
-              {maxValue !== null && (
-                <ReferenceLine
-                  y={maxValue}
-                  stroke="#cbd5e1"
-                  strokeDasharray="3 3"
-                />
-              )}
+              <ReferenceLine
+                y={minValue}
+                stroke="#cbd5e1"
+                strokeDasharray="3 3"
+              />
+              <ReferenceLine
+                y={maxValue}
+                stroke="#cbd5e1"
+                strokeDasharray="3 3"
+              />
             </LineChart>
           </ResponsiveContainer>
         ) : (
@@ -171,30 +173,28 @@ const ChartComponent = ({
         )}
       </div>
 
-      {stats && (
-        <div className="mt-4 grid grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-gray-500">Min</p>
-            <p className="font-medium">{formatValue(safeParseFloat(stats.min), unit)}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Max</p>
-            <p className="font-medium">{formatValue(safeParseFloat(stats.max), unit)}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Average</p>
-            <p className="font-medium">{formatValue(safeParseFloat(stats.avg), unit)}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Trend</p>
-            <p className={`font-medium ${
-              stats.trend > 0 ? 'text-green-600' : stats.trend < 0 ? 'text-red-600' : 'text-gray-600'
-            }`}>
-              {stats.trend > 0 ? '↑' : stats.trend < 0 ? '↓' : '→'} {Math.abs(safeParseFloat(stats.trend) || 0).toFixed(2)}
-            </p>
-          </div>
+      <div className="mt-4 grid grid-cols-4 gap-4 text-sm">
+        <div>
+          <p className="text-gray-500">Min</p>
+          <p className="font-medium">{formatValue(safeParseFloat(stats.min), unit)}</p>
         </div>
-      )}
+        <div>
+          <p className="text-gray-500">Max</p>
+          <p className="font-medium">{formatValue(safeParseFloat(stats.max), unit)}</p>
+        </div>
+        <div>
+          <p className="text-gray-500">Average</p>
+          <p className="font-medium">{formatValue(safeParseFloat(stats.avg), unit)}</p>
+        </div>
+        <div>
+          <p className="text-gray-500">Trend</p>
+          <p className={`font-medium ${
+            stats.trend > 0 ? 'text-green-600' : stats.trend < 0 ? 'text-red-600' : 'text-gray-600'
+          }`}>
+            {stats.trend > 0 ? '↑' : stats.trend < 0 ? '↓' : '→'} {Math.abs(safeParseFloat(stats.trend) || 0).toFixed(2)}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
