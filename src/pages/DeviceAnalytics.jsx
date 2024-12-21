@@ -292,7 +292,7 @@ const DeviceAnalytics = () => {
           flowRate: historicalData.flowRate[historicalData.flowRate.length - 1]?.flowRate
         };
 
-        const response = await fetch(`http://localhost:3001/api/alerts/check/${icealertId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/alerts/check/${icealertId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
