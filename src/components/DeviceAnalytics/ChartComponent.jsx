@@ -1,159 +1,171 @@
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceDot, ReferenceLine } from 'recharts';
-import { NORMAL_RANGES } from './constants';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts';
+import { format } from 'date-fns';
 
-const ChartComponent = ({ 
-  data = [], 
-  metric, 
-  title, 
-  color, 
+// Helper functions for safe value handling
+const safeParseFloat = (value) => {
+  if (value === null || value === undefined || isNaN(value)) return null;
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? null : parsed;
+};
+
+const formatValue = (value, unit) => {
+  if (value === null || value === undefined) return 'N/A';
+  return `${value.toFixed(1)}${unit}`;
+};
+
+const ChartComponent = ({
+  data,
+  metric,
+  title,
+  color,
   unit,
-  stats = {},
+  stats,
   isInRange,
   timeRange,
-  onTimeRangeChange 
+  onTimeRangeChange
 }) => {
-  const normalRange = NORMAL_RANGES[metric] || { min: 0, max: 0 };
-  
-  // Ensure data is an array and not null
+  // Ensure data is an array and contains valid entries
   const safeData = Array.isArray(data) ? data : [];
-  const lastDataPoint = safeData[safeData.length - 1] || {};
-  const lastValue = lastDataPoint[metric];
+  
+  // Get the last data point safely
+  const lastDataPoint = safeData[safeData.length - 1];
+  const lastValue = lastDataPoint ? safeParseFloat(lastDataPoint[metric]) : null;
 
-  // Helper function to safely parse numbers
-  const safeParseFloat = (value) => {
-    if (value === null || value === undefined) return null;
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? null : parsed;
+  // Format the timestamp for display
+  const formatTimestamp = (timestamp) => {
+    try {
+      return format(new Date(timestamp), 'HH:mm');
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return 'Invalid Time';
+    }
   };
 
-  // Helper function to format value
-  const formatValue = (value) => {
-    if (value === null || value === undefined) return 'N/A';
-    return value.toFixed(1);
+  // Custom tooltip content
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload || !payload.length) return null;
+
+    const value = safeParseFloat(payload[0].value);
+    if (value === null) return null;
+
+    return (
+      <div className="bg-white p-3 shadow-lg rounded-lg border border-gray-200">
+        <p className="text-gray-600">{formatTimestamp(label)}</p>
+        <p className="font-medium text-gray-800">
+          {formatValue(value, unit)}
+        </p>
+      </div>
+    );
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h3 className="text-xl font-semibold">{title}</h3>
-          <select 
-            className="border rounded-lg px-3 py-1.5 bg-white shadow-sm text-sm"
-            value={timeRange}
-            onChange={(e) => onTimeRangeChange(metric, e.target.value)}
-            aria-label={`Select Time Range for ${title}`}
-          >
-            <option value="12h">Last 12 Hours</option>
-            <option value="24h">Last 24 Hours</option>
-            <option value="48h">Last 48 Hours</option>
-          </select>
+    <div className="bg-white p-6 rounded-xl shadow-sm">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+          <p className="text-gray-500">
+            Current: {formatValue(lastValue, unit)}
+            {lastValue !== null && (
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-sm ${
+                isInRange(lastValue) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {isInRange(lastValue) ? 'Normal' : 'Out of Range'}
+              </span>
+            )}
+          </p>
         </div>
-        <div className="text-sm text-gray-600">
-          Normal Range: {normalRange.min} - {normalRange.max}{unit}
+        <div className="flex gap-2">
+          {['12h', '24h', '48h'].map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(metric, range)}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                timeRange === range
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {range}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {/* Primary Stats */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="text-gray-600 text-xs mb-1">Last Recorded</div>
-          <div className={`text-2xl font-bold ${
-            lastValue && isInRange(lastValue) ? 'text-gray-900' : 'text-red-600'
-          }`}>
-            {formatValue(lastValue)}{unit}
-          </div>
-          <div className="text-sm text-gray-500">
-            {lastDataPoint?.timestamp ? new Date(lastDataPoint.timestamp).toLocaleTimeString() : 'No data'}
-          </div>
-        </div>
-
-        {/* Min/Max Card */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="text-gray-600 text-xs mb-1">Range</div>
-          <div className="flex items-end gap-2">
-            <span className={`text-sm ${
-              stats.min && isInRange(safeParseFloat(stats.min)) ? 'text-blue-600' : 'text-red-600'
-            }`}>
-              Min: {formatValue(stats.min)}{unit}
-            </span>
-            <span className="text-gray-400 mx-1">|</span>
-            <span className={`text-sm ${
-              stats.max && isInRange(safeParseFloat(stats.max)) ? 'text-blue-600' : 'text-red-600'
-            }`}>
-              Max: {formatValue(stats.max)}{unit}
-            </span>
-          </div>
-        </div>
-
-        {/* Anomalies Card */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="text-gray-600 text-xs mb-1">Anomalies</div>
-          <div className="text-lg font-semibold">
-            {stats.anomalies || 0}
-          </div>
-          <div className="text-xs text-gray-500">
-            ({((stats.anomalies || 0) / (safeData.length || 1) * 100).toFixed(1)}% of readings)
-          </div>
-        </div>
-
-        {/* Statistics Card */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="text-gray-600 text-xs mb-1">Analysis</div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Median</span>
-              <span className={`font-medium ${
-                stats.median && isInRange(safeParseFloat(stats.median)) ? 'text-gray-900' : 'text-red-600'
-              }`}>
-                {formatValue(stats.median)}{unit}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Average</span>
-              <span className={`font-medium ${
-                stats.average && isInRange(safeParseFloat(stats.average)) ? 'text-gray-900' : 'text-red-600'
-              }`}>
-                {formatValue(stats.average)}{unit}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Chart */}
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={safeData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`gradient-${metric}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
-                <stop offset="95%" stopColor={color} stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="timestamp" 
-              tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()}
+          <LineChart
+            data={safeData}
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis
+              dataKey="timestamp"
+              tickFormatter={formatTimestamp}
+              stroke="#9ca3af"
             />
-            <YAxis domain={['auto', 'auto']} />
-            <Tooltip
-              labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-              formatter={(value) => [formatValue(value) + unit, metric]}
-            />
-            <ReferenceLine y={normalRange.min} stroke="#666" strokeDasharray="3 3" />
-            <ReferenceLine y={normalRange.max} stroke="#666" strokeDasharray="3 3" />
-            <Area
+            <YAxis stroke="#9ca3af" />
+            <Tooltip content={<CustomTooltip />} />
+            <Line
               type="monotone"
               dataKey={metric}
               stroke={color}
-              fillOpacity={1}
-              fill={`url(#gradient-${metric})`}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4 }}
+              isAnimationActive={false}
             />
-          </AreaChart>
+            {stats?.normalRange && (
+              <>
+                <ReferenceLine
+                  y={stats.normalRange.min}
+                  stroke="#cbd5e1"
+                  strokeDasharray="3 3"
+                />
+                <ReferenceLine
+                  y={stats.normalRange.max}
+                  stroke="#cbd5e1"
+                  strokeDasharray="3 3"
+                />
+              </>
+            )}
+          </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {stats && (
+        <div className="mt-4 grid grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-gray-500">Min</p>
+            <p className="font-medium">{formatValue(stats.min, unit)}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Max</p>
+            <p className="font-medium">{formatValue(stats.max, unit)}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Average</p>
+            <p className="font-medium">{formatValue(stats.avg, unit)}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Trend</p>
+            <p className={`font-medium ${
+              stats.trend > 0 ? 'text-green-600' : stats.trend < 0 ? 'text-red-600' : 'text-gray-600'
+            }`}>
+              {stats.trend > 0 ? '↑' : stats.trend < 0 ? '↓' : '→'} {Math.abs(stats.trend).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

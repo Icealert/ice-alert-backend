@@ -1,39 +1,14 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "framework": "vite",
   "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
-  "env": {
-    "VITE_SUPABASE_URL": "https://xxdjtvevvszefsvgjwye.supabase.co",
-    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4ZGp0dmV2dnN6ZWZzdmdqd3llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQxNzQ4NTksImV4cCI6MjA0OTc1MDg1OX0.g4mULV_tFw_W6L_Iy1GxJuYm1O_tUt30Wuu7R1aNLuo",
-    "NODE_ENV": "production"
-  },
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET,HEAD,PUT,POST,DELETE,PATCH,OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "X-Requested-With, Content-Type, Authorization, apikey"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "s-maxage=1, stale-while-revalidate"
-        }
-      ]
-    }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "github": {
+    "silent": true
+  }
 } 
