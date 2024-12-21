@@ -10,8 +10,8 @@ const DeviceAnalytics = () => {
   const { icealertId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [deviceDetails, setDeviceDetails] = useState(location.state?.deviceDetails);
-  const [loading, setLoading] = useState(!location.state?.deviceDetails);
+  const [deviceDetails, setDeviceDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
@@ -30,7 +30,6 @@ const DeviceAnalytics = () => {
     alerts: DEFAULT_ALERT_SETTINGS
   });
 
-  // Individual time ranges for each metric
   const [timeRanges, setTimeRanges] = useState({
     temperature: '24h',
     humidity: '24h',
@@ -39,62 +38,83 @@ const DeviceAnalytics = () => {
 
   const [historicalData, setHistoricalData] = useState([]);
 
-  // Fetch device details if not available in location state
+  // Helper function to create safe stats object
+  const createSafeStats = (metricStats, normalRange) => {
+    return {
+      min: metricStats?.min ?? null,
+      max: metricStats?.max ?? null,
+      avg: metricStats?.avg ?? null,
+      trend: metricStats?.trend ?? 0,
+      normalRange: {
+        min: normalRange?.min ?? 0,
+        max: normalRange?.max ?? 100
+      }
+    };
+  };
+
+  // Fetch device details
   useEffect(() => {
     const fetchDeviceDetails = async () => {
-      if (!deviceDetails && icealertId) {
-        try {
-          setLoading(true);
-          const device = await fetchDeviceByIceAlertId(icealertId);
-          if (!device) {
-            throw new Error('Device not found');
-          }
-          setDeviceDetails(device);
-          // Initialize settings form with device data
-          setSettingsForm(prev => ({
-            ...prev,
-            name: device.name || '',
-            location: device.location || '',
-            partNumber: device.part_number || '',
-            serialNumber: device.serial_number || '',
-            normalRanges: device.settings?.normalRanges || { ...NORMAL_RANGES },
-            alertThresholds: device.settings?.alertThresholds || {
-              flowRate: {
-                warning: NORMAL_RANGES.flowRate.warningTimeThreshold,
-                critical: NORMAL_RANGES.flowRate.criticalTimeThreshold,
-                noFlowDuration: 30
-              }
-            },
-            alerts: device.settings?.alerts || DEFAULT_ALERT_SETTINGS
-          }));
-        } catch (err) {
-          console.error('Error fetching device details:', err);
-          setError(err.message);
-        } finally {
-          setLoading(false);
+      if (!icealertId) {
+        setError('No device ID provided');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const device = await fetchDeviceByIceAlertId(icealertId);
+        
+        if (!device) {
+          throw new Error('Device not found');
         }
+
+        setDeviceDetails(device);
+        setSettingsForm(prev => ({
+          ...prev,
+          name: device.name || '',
+          location: device.location || '',
+          partNumber: device.part_number || '',
+          serialNumber: device.serial_number || '',
+          normalRanges: device.settings?.normalRanges || { ...NORMAL_RANGES },
+          alertThresholds: device.settings?.alertThresholds || {
+            flowRate: {
+              warning: NORMAL_RANGES.flowRate.warningTimeThreshold,
+              critical: NORMAL_RANGES.flowRate.criticalTimeThreshold,
+              noFlowDuration: 30
+            }
+          },
+          alerts: device.settings?.alerts || DEFAULT_ALERT_SETTINGS
+        }));
+      } catch (err) {
+        console.error('Error fetching device details:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchDeviceDetails();
-  }, [icealertId, deviceDetails]);
+  }, [icealertId]);
 
-  // Fetch historical data for each metric
+  // Fetch historical data
   useEffect(() => {
     const fetchHistoricalData = async () => {
-      if (deviceDetails?.id) {
-        try {
-          const readings = await fetchDeviceReadings(deviceDetails.icealert_id, timeRanges.temperature);
-          setHistoricalData(readings);
-        } catch (err) {
-          console.error('Error fetching historical data:', err);
-          setError(err.message);
-        }
+      if (!deviceDetails?.icealert_id) return;
+
+      try {
+        setError(null);
+        const readings = await fetchDeviceReadings(deviceDetails.icealert_id, timeRanges.temperature);
+        setHistoricalData(readings || []);
+      } catch (err) {
+        console.error('Error fetching historical data:', err);
+        setError(err.message);
       }
     };
 
     fetchHistoricalData();
-  }, [deviceDetails?.id, timeRanges]);
+  }, [deviceDetails?.icealert_id, timeRanges.temperature]);
 
   // Handle time range changes
   const handleTimeRangeChange = (metric, value) => {
@@ -106,9 +126,10 @@ const DeviceAnalytics = () => {
 
   // Check if a value is within normal range
   const isInRange = (value, metric) => {
-    if (!value || !settingsForm.normalRanges[metric]) return true;
+    if (value === null || value === undefined) return true;
     const range = settingsForm.normalRanges[metric];
-    return value >= range.min && value <= range.max;
+    if (!range) return true;
+    return value >= (range.min || 0) && value <= (range.max || 100);
   };
 
   // Handle settings update
@@ -116,6 +137,7 @@ const DeviceAnalytics = () => {
     if (!deviceDetails?.id) return;
     
     try {
+      setError(null);
       await updateDeviceSettings(deviceDetails.id, newSettings);
       setSettingsForm(newSettings);
       setIsSettingsOpen(false);
@@ -125,23 +147,45 @@ const DeviceAnalytics = () => {
     }
   };
 
-  // Helper function to create safe stats object
-  const createSafeStats = (metricStats, normalRange) => {
-    return {
-      min: metricStats?.min ?? null,
-      max: metricStats?.max ?? null,
-      avg: metricStats?.avg ?? null,
-      trend: metricStats?.trend ?? 0,
-      normalRange: {
-        min: normalRange?.min ?? null,
-        max: normalRange?.max ?? null
-      }
-    };
-  };
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading device data...</p>
+      </div>
+    </div>
+  );
 
-  if (loading) return <div className="p-4">Loading...</div>;
-  if (error) return <div className="p-4 text-red-600">Error: {error}</div>;
-  if (!deviceDetails) return <div className="p-4">No device found</div>;
+  if (error) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="text-red-500 text-xl mb-4">⚠️</div>
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Device</h2>
+        <p className="text-gray-600 mb-4">{error}</p>
+        <button
+          onClick={() => navigate('/')}
+          className="text-blue-600 hover:text-blue-800 font-medium"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!deviceDetails) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Device Not Found</h2>
+        <p className="text-gray-600 mb-4">The requested device could not be found.</p>
+        <button
+          onClick={() => navigate('/')}
+          className="text-blue-600 hover:text-blue-800 font-medium"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
