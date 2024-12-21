@@ -175,7 +175,7 @@ const deviceService = {
   async updateAlertSettings(icealertId, settings) {
     try {
       console.log('Updating alert settings for device:', icealertId, settings);
-      const response = await api.put(`/devices/${encodeURIComponent(icealertId)}/alerts`, settings);
+      const response = await api.put(`/devices/by-icealert/${encodeURIComponent(icealertId)}/alerts`, settings);
       return response.data;
     } catch (error) {
       console.error('Failed to update alert settings:', error);
