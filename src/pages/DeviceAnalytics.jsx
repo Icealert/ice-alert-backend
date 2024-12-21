@@ -125,6 +125,20 @@ const DeviceAnalytics = () => {
     }
   };
 
+  // Helper function to create safe stats object
+  const createSafeStats = (metricStats, normalRange) => {
+    return {
+      min: metricStats?.min ?? null,
+      max: metricStats?.max ?? null,
+      avg: metricStats?.avg ?? null,
+      trend: metricStats?.trend ?? 0,
+      normalRange: {
+        min: normalRange?.min ?? null,
+        max: normalRange?.max ?? null
+      }
+    };
+  };
+
   if (loading) return <div className="p-4">Loading...</div>;
   if (error) return <div className="p-4 text-red-600">Error: {error}</div>;
   if (!deviceDetails) return <div className="p-4">No device found</div>;
@@ -160,10 +174,10 @@ const DeviceAnalytics = () => {
           title="Temperature"
           color="#ef4444"
           unit="°C"
-          stats={{
-            current: deviceDetails.stats.temperature.current,
-            normalRange: settingsForm.normalRanges.temperature
-          }}
+          stats={createSafeStats(
+            deviceDetails?.stats?.temperature,
+            settingsForm.normalRanges.temperature
+          )}
           isInRange={(value) => isInRange(value, 'temperature')}
           timeRange={timeRanges.temperature}
           onTimeRangeChange={handleTimeRangeChange}
@@ -175,10 +189,10 @@ const DeviceAnalytics = () => {
           title="Humidity"
           color="#3b82f6"
           unit="%"
-          stats={{
-            current: deviceDetails.stats.humidity.current,
-            normalRange: settingsForm.normalRanges.humidity
-          }}
+          stats={createSafeStats(
+            deviceDetails?.stats?.humidity,
+            settingsForm.normalRanges.humidity
+          )}
           isInRange={(value) => isInRange(value, 'humidity')}
           timeRange={timeRanges.humidity}
           onTimeRangeChange={handleTimeRangeChange}
@@ -190,10 +204,10 @@ const DeviceAnalytics = () => {
           title="Flow Rate"
           color="#10b981"
           unit="L/min"
-          stats={{
-            current: deviceDetails.stats.flowRate.current,
-            normalRange: settingsForm.normalRanges.flowRate
-          }}
+          stats={createSafeStats(
+            deviceDetails?.stats?.flowRate,
+            settingsForm.normalRanges.flowRate
+          )}
           isInRange={(value) => isInRange(value, 'flowRate')}
           timeRange={timeRanges.flowRate}
           onTimeRangeChange={handleTimeRangeChange}

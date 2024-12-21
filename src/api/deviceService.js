@@ -3,62 +3,64 @@ import { supabase } from './config';
 // Helper function to format device data
 const formatDeviceData = (device) => {
   if (!device) return null;
+
+  // Helper function to create safe stats object
+  const createSafeStats = (current, timestamp) => ({
+    current: current || null,
+    timestamp: timestamp || null,
+    min: null,
+    max: null,
+    avg: null,
+    trend: 0
+  });
+
   return {
     id: device.id,
-    name: device.device_name,
-    location: device.location,
-    part_number: device.part_number,
-    serial_number: device.serial_number,
+    name: device.device_name || '',
+    location: device.location || '',
+    part_number: device.part_number || '',
+    serial_number: device.serial_number || '',
     icealert_id: device.icealert_id,
     settings: {
       normalRanges: {
         temperature: {
-          min: device.temperature_min,
-          max: device.temperature_max
+          min: device.temperature_min || 0,
+          max: device.temperature_max || 100
         },
         humidity: {
-          min: device.humidity_min,
-          max: device.humidity_max
+          min: device.humidity_min || 0,
+          max: device.humidity_max || 100
         },
         flowRate: {
-          min: device.flow_rate_min,
-          max: device.flow_rate_max,
-          warningTimeThreshold: device.flow_rate_warning_hours,
-          criticalTimeThreshold: device.flow_rate_critical_hours
+          min: device.flow_rate_min || 0,
+          max: device.flow_rate_max || 100,
+          warningTimeThreshold: device.flow_rate_warning_hours || 2,
+          criticalTimeThreshold: device.flow_rate_critical_hours || 4
         }
       },
       alerts: {
-        enabled: device.email_alerts_enabled,
+        enabled: device.email_alerts_enabled || false,
         recipients: device.alert_recipients || [],
         conditions: {
           temperature: {
-            enabled: device.temperature_alert_enabled,
-            threshold: device.temperature_alert_threshold
+            enabled: device.temperature_alert_enabled || false,
+            threshold: device.temperature_alert_threshold || 0
           },
           humidity: {
-            enabled: device.humidity_alert_enabled,
-            threshold: device.humidity_alert_threshold
+            enabled: device.humidity_alert_enabled || false,
+            threshold: device.humidity_alert_threshold || 0
           },
           flowRate: {
-            enabled: device.flow_rate_alert_enabled,
-            noFlowDuration: device.no_flow_alert_minutes
+            enabled: device.flow_rate_alert_enabled || false,
+            noFlowDuration: device.no_flow_alert_minutes || 30
           }
         }
       }
     },
     stats: {
-      temperature: {
-        current: device.temperature,
-        timestamp: device.temperature_timestamp
-      },
-      humidity: {
-        current: device.humidity,
-        timestamp: device.humidity_timestamp
-      },
-      flowRate: {
-        current: device.flow_rate,
-        timestamp: device.flow_rate_timestamp
-      }
+      temperature: createSafeStats(device.temperature, device.temperature_timestamp),
+      humidity: createSafeStats(device.humidity, device.humidity_timestamp),
+      flowRate: createSafeStats(device.flow_rate, device.flow_rate_timestamp)
     }
   };
 };
@@ -68,10 +70,10 @@ const formatReadingsData = (readings) => {
   if (!readings || !Array.isArray(readings)) return [];
   
   return readings.map(reading => ({
-    timestamp: reading.created_at,
-    temperature: reading.temperature,
-    humidity: reading.humidity,
-    flowRate: reading.flow_rate
+    timestamp: reading.created_at || null,
+    temperature: reading.temperature || null,
+    humidity: reading.humidity || null,
+    flowRate: reading.flow_rate || null
   }));
 };
 
@@ -138,19 +140,20 @@ export const fetchDeviceByIceAlertId = async (icealertId) => {
 
     if (dataError) {
       console.error('Error fetching device data:', dataError);
-      throw dataError;
+      // Don't throw here, just use null values
+      console.log('Using default values for device data');
     }
 
-    // Combine the data
+    // Combine the data with safe defaults
     const combinedData = {
       ...deviceSettings,
-      temperature: deviceData?.temperature,
-      temperature_timestamp: deviceData?.temperature_timestamp,
-      humidity: deviceData?.humidity,
-      humidity_timestamp: deviceData?.humidity_timestamp,
-      flow_rate: deviceData?.flow_rate,
-      flow_rate_timestamp: deviceData?.flow_rate_timestamp,
-      created_at: deviceData?.created_at
+      temperature: deviceData?.temperature || null,
+      temperature_timestamp: deviceData?.temperature_timestamp || null,
+      humidity: deviceData?.humidity || null,
+      humidity_timestamp: deviceData?.humidity_timestamp || null,
+      flow_rate: deviceData?.flow_rate || null,
+      flow_rate_timestamp: deviceData?.flow_rate_timestamp || null,
+      created_at: deviceData?.created_at || new Date().toISOString()
     };
 
     return formatDeviceData(combinedData);
@@ -182,13 +185,13 @@ export const fetchDeviceReadings = async (deviceId, timeRange = '24h') => {
 
     if (error) {
       console.error('Error fetching device readings:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
 
     return formatReadingsData(data || []);
   } catch (error) {
     console.error('Error in fetchDeviceReadings:', error);
-    throw error;
+    return []; // Return empty array on error
   }
 };
 
