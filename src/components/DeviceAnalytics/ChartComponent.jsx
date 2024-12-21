@@ -14,18 +14,11 @@ const ChartComponent = ({
   onTimeRangeChange 
 }) => {
   const normalRange = NORMAL_RANGES[metric] || { min: 0, max: 0 };
-  const lastReading = data[data.length - 1];
-  const hasData = data.length > 0;
-
-  // Safely access stats with defaults
-  const safeStats = {
-    min: stats?.min || '0',
-    max: stats?.max || '0',
-    median: stats?.median || '0',
-    stdDev: stats?.stdDev || '0',
-    anomalies: stats?.anomalies || 0,
-    trend: stats?.trend || '0'
-  };
+  
+  // Ensure data is an array and not null
+  const safeData = Array.isArray(data) ? data : [];
+  const lastDataPoint = safeData[safeData.length - 1];
+  const lastValue = lastDataPoint ? lastDataPoint[metric] : null;
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-6">
@@ -54,12 +47,12 @@ const ChartComponent = ({
         <div className="bg-gray-50 p-3 rounded-lg">
           <div className="text-gray-600 text-xs mb-1">Last Recorded</div>
           <div className={`text-2xl font-bold ${
-            hasData && isInRange(lastReading?.[metric]) ? 'text-gray-900' : 'text-red-600'
+            lastValue && isInRange(lastValue) ? 'text-gray-900' : 'text-red-600'
           }`}>
-            {hasData ? lastReading[metric]?.toFixed(1) : 'N/A'}{hasData ? unit : ''}
+            {lastValue?.toFixed(1) || 'N/A'}{unit}
           </div>
           <div className="text-sm text-gray-500">
-            {hasData ? new Date(lastReading.timestamp).toLocaleTimeString() : 'No data'}
+            {lastDataPoint ? new Date(lastDataPoint.timestamp).toLocaleTimeString() : 'No data'}
           </div>
         </div>
 
@@ -68,15 +61,15 @@ const ChartComponent = ({
           <div className="text-gray-600 text-xs mb-1">Range</div>
           <div className="flex items-end gap-2">
             <span className={`text-sm ${
-              isInRange(parseFloat(safeStats.min)) ? 'text-blue-600' : 'text-red-600'
+              stats.min && isInRange(parseFloat(stats.min)) ? 'text-blue-600' : 'text-red-600'
             }`}>
-              Min: {safeStats.min}{unit}
+              Min: {stats.min || 'N/A'}{unit}
             </span>
             <span className="text-gray-400 mx-1">|</span>
             <span className={`text-sm ${
-              isInRange(parseFloat(safeStats.max)) ? 'text-blue-600' : 'text-red-600'
+              stats.max && isInRange(parseFloat(stats.max)) ? 'text-blue-600' : 'text-red-600'
             }`}>
-              Max: {safeStats.max}{unit}
+              Max: {stats.max || 'N/A'}{unit}
             </span>
           </div>
         </div>
@@ -85,10 +78,10 @@ const ChartComponent = ({
         <div className="bg-gray-50 p-3 rounded-lg">
           <div className="text-gray-600 text-xs mb-1">Anomalies</div>
           <div className="text-lg font-semibold">
-            {safeStats.anomalies}
+            {stats.anomalies || 0}
           </div>
           <div className="text-xs text-gray-500">
-            {hasData ? `(${((safeStats.anomalies / data.length) * 100).toFixed(1)}% of readings)` : 'No data'}
+            ({((stats.anomalies || 0) / (safeData.length || 1) * 100).toFixed(1)}% of readings)
           </div>
         </div>
 
@@ -99,14 +92,14 @@ const ChartComponent = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Median</span>
               <span className={`font-medium ${
-                isInRange(parseFloat(safeStats.median)) ? 'text-gray-900' : 'text-red-600'
+                stats.median && isInRange(parseFloat(stats.median)) ? 'text-gray-900' : 'text-red-600'
               }`}>
-                {safeStats.median}{unit}
+                {stats.median || 'N/A'}{unit}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Std Dev</span>
-              <span className="font-medium">{safeStats.stdDev}{unit}</span>
+              <span className="font-medium">{stats.stdDev || 'N/A'}{unit}</span>
             </div>
           </div>
         </div>
@@ -114,124 +107,118 @@ const ChartComponent = ({
 
       {/* Chart */}
       <div className="h-64">
-        {hasData ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart 
-              data={data} 
-              margin={{ top: 10, right: 10, left: 10, bottom: 12 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" className="opacity-50" />
-              <XAxis 
-                dataKey="timestamp" 
-                tickFormatter={(timestamp) => {
-                  const date = new Date(timestamp);
-                  return date.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit'
-                  });
-                }}
-                interval="preserveStartEnd"
-                tick={{ fontSize: 12, fill: '#4B5563' }}
-                tickLine={{ stroke: '#9CA3AF' }}
-                axisLine={{ stroke: '#9CA3AF' }}
-                minTickGap={30}
-                height={35}
-              />
-              <YAxis 
-                tickFormatter={(value) => `${value}${unit}`}
-                tick={{ fontSize: 12, fill: '#4B5563' }}
-                tickLine={{ stroke: '#9CA3AF' }}
-                axisLine={{ stroke: '#9CA3AF' }}
-                domain={[
-                  (dataMin) => Math.floor(Math.min(normalRange.min * 0.95, dataMin || 0)),
-                  (dataMax) => Math.ceil(Math.max(normalRange.max * 1.05, dataMax || 0))
-                ]}
-                width={65}
-              />
-              {/* Normal range area */}
-              <Area
-                y1={normalRange.min}
-                y2={normalRange.max}
-                fill="#4ade8033"
-                strokeWidth={0}
-              />
-              {/* Reference lines */}
-              <ReferenceLine
-                y={normalRange.min}
-                stroke="#4ade80"
-                strokeDasharray="3 3"
-              />
-              <ReferenceLine
-                y={normalRange.max}
-                stroke="#4ade80"
-                strokeDasharray="3 3"
-              />
-              <Tooltip 
-                labelFormatter={(label) => {
-                  const date = new Date(label);
-                  return date.toLocaleString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                  });
-                }}
-                formatter={(value) => [
-                  `${value?.toFixed(2)}${unit} ${isInRange(value) ? '✓' : '⚠️'}`,
-                  title
-                ]}
-                contentStyle={{ 
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-                }}
-                cursor={{ stroke: '#9CA3AF', strokeWidth: 1 }}
-              />
-              <Area 
-                type="monotone" 
-                dataKey={metric} 
-                stroke={color} 
-                fill={`${color}33`}
-                strokeWidth={2}
-                dot={{
-                  r: 3,
-                  fill: 'white',
-                  stroke: color,
-                  strokeWidth: 2
-                }}
-                activeDot={{
-                  r: 5,
-                  fill: color,
-                  stroke: 'white',
-                  strokeWidth: 2
-                }}
-              />
-              {/* Anomaly dots */}
-              {data
-                .map((item, i) => ({
-                  ...item,
-                  isAnomaly: !isInRange(item[metric])
-                }))
-                .filter(item => item.isAnomaly)
-                .map((item, i) => (
-                  <ReferenceDot
-                    key={i}
-                    x={item.timestamp}
-                    y={item[metric]}
-                    r={4}
-                    fill="red"
-                    stroke="white"
-                    strokeWidth={1}
-                  />
-                ))
-              }
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
-            No data available
-          </div>
-        )}
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart 
+            data={safeData} 
+            margin={{ top: 10, right: 10, left: 10, bottom: 12 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" className="opacity-50" />
+            <XAxis 
+              dataKey="timestamp" 
+              tickFormatter={(timestamp) => {
+                const date = new Date(timestamp);
+                return date.toLocaleTimeString([], { 
+                  hour: '2-digit', 
+                  minute: '2-digit'
+                });
+              }}
+              interval="preserveStartEnd"
+              tick={{ fontSize: 12, fill: '#4B5563' }}
+              tickLine={{ stroke: '#9CA3AF' }}
+              axisLine={{ stroke: '#9CA3AF' }}
+              minTickGap={30}
+              height={35}
+            />
+            <YAxis 
+              tickFormatter={(value) => `${value}${unit}`}
+              tick={{ fontSize: 12, fill: '#4B5563' }}
+              tickLine={{ stroke: '#9CA3AF' }}
+              axisLine={{ stroke: '#9CA3AF' }}
+              domain={[
+                (dataMin) => Math.floor(Math.min(normalRange.min * 0.95, dataMin || 0)),
+                (dataMax) => Math.ceil(Math.max(normalRange.max * 1.05, dataMax || 0))
+              ]}
+              width={65}
+            />
+            {/* Normal range area */}
+            <Area
+              y1={normalRange.min}
+              y2={normalRange.max}
+              fill="#4ade8033"
+              strokeWidth={0}
+            />
+            {/* Reference lines */}
+            <ReferenceLine
+              y={normalRange.min}
+              stroke="#4ade80"
+              strokeDasharray="3 3"
+            />
+            <ReferenceLine
+              y={normalRange.max}
+              stroke="#4ade80"
+              strokeDasharray="3 3"
+            />
+            <Tooltip 
+              labelFormatter={(label) => {
+                const date = new Date(label);
+                return date.toLocaleString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                });
+              }}
+              formatter={(value) => [
+                `${value?.toFixed(2) || 'N/A'}${unit} ${value && isInRange(value) ? '✓' : '⚠️'}`,
+                title
+              ]}
+              contentStyle={{ 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                border: 'none',
+                borderRadius: '8px',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+              }}
+              cursor={{ stroke: '#9CA3AF', strokeWidth: 1 }}
+            />
+            <Area 
+              type="monotone" 
+              dataKey={metric} 
+              stroke={color} 
+              fill={`${color}33`}
+              strokeWidth={2}
+              dot={{
+                r: 3,
+                fill: 'white',
+                stroke: color,
+                strokeWidth: 2
+              }}
+              activeDot={{
+                r: 5,
+                fill: color,
+                stroke: 'white',
+                strokeWidth: 2
+              }}
+            />
+            {/* Anomaly dots */}
+            {safeData
+              .map((item, i) => ({
+                ...item,
+                isAnomaly: item[metric] && !isInRange(item[metric])
+              }))
+              .filter(item => item.isAnomaly)
+              .map((item, i) => (
+                <ReferenceDot
+                  key={i}
+                  x={item.timestamp}
+                  y={item[metric]}
+                  r={4}
+                  fill="red"
+                  stroke="white"
+                  strokeWidth={1}
+                />
+              ))
+            }
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Chart Legend */}
