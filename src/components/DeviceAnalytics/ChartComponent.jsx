@@ -29,20 +29,26 @@ const ChartComponent = ({
   title,
   color,
   unit,
-  stats,
+  stats = {},
   isInRange,
   timeRange,
   onTimeRangeChange
 }) => {
   // Ensure data is an array and contains valid entries
-  const safeData = Array.isArray(data) ? data : [];
+  const safeData = Array.isArray(data) ? data.filter(item => item && item[metric] !== null) : [];
   
   // Get the last data point safely
   const lastDataPoint = safeData[safeData.length - 1];
   const lastValue = lastDataPoint ? safeParseFloat(lastDataPoint[metric]) : null;
 
+  // Get normal range values safely
+  const normalRange = stats?.normalRange || {};
+  const minValue = safeParseFloat(normalRange.min);
+  const maxValue = safeParseFloat(normalRange.max);
+
   // Format the timestamp for display
   const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'No Time';
     try {
       return format(new Date(timestamp), 'HH:mm');
     } catch (error) {
@@ -66,6 +72,20 @@ const ChartComponent = ({
         </p>
       </div>
     );
+  };
+
+  // Calculate Y-axis domain
+  const calculateDomain = () => {
+    if (!safeData.length) return [0, 100];
+    
+    const values = safeData.map(item => safeParseFloat(item[metric])).filter(Boolean);
+    if (!values.length) return [0, 100];
+    
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = (max - min) * 0.1;
+    
+    return [Math.max(0, min - padding), max + padding];
   };
 
   return (
@@ -102,66 +122,75 @@ const ChartComponent = ({
       </div>
 
       <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={safeData}
-            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="timestamp"
-              tickFormatter={formatTimestamp}
-              stroke="#9ca3af"
-            />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip content={<CustomTooltip />} />
-            <Line
-              type="monotone"
-              dataKey={metric}
-              stroke={color}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-              isAnimationActive={false}
-            />
-            {stats?.normalRange && (
-              <>
+        {safeData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={safeData}
+              margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="timestamp"
+                tickFormatter={formatTimestamp}
+                stroke="#9ca3af"
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                domain={calculateDomain()}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Line
+                type="monotone"
+                dataKey={metric}
+                stroke={color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+                isAnimationActive={false}
+              />
+              {minValue !== null && (
                 <ReferenceLine
-                  y={stats.normalRange.min}
+                  y={minValue}
                   stroke="#cbd5e1"
                   strokeDasharray="3 3"
                 />
+              )}
+              {maxValue !== null && (
                 <ReferenceLine
-                  y={stats.normalRange.max}
+                  y={maxValue}
                   stroke="#cbd5e1"
                   strokeDasharray="3 3"
                 />
-              </>
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-gray-500">
+            No data available
+          </div>
+        )}
       </div>
 
       {stats && (
         <div className="mt-4 grid grid-cols-4 gap-4 text-sm">
           <div>
             <p className="text-gray-500">Min</p>
-            <p className="font-medium">{formatValue(stats.min, unit)}</p>
+            <p className="font-medium">{formatValue(safeParseFloat(stats.min), unit)}</p>
           </div>
           <div>
             <p className="text-gray-500">Max</p>
-            <p className="font-medium">{formatValue(stats.max, unit)}</p>
+            <p className="font-medium">{formatValue(safeParseFloat(stats.max), unit)}</p>
           </div>
           <div>
             <p className="text-gray-500">Average</p>
-            <p className="font-medium">{formatValue(stats.avg, unit)}</p>
+            <p className="font-medium">{formatValue(safeParseFloat(stats.avg), unit)}</p>
           </div>
           <div>
             <p className="text-gray-500">Trend</p>
             <p className={`font-medium ${
               stats.trend > 0 ? 'text-green-600' : stats.trend < 0 ? 'text-red-600' : 'text-gray-600'
             }`}>
-              {stats.trend > 0 ? '↑' : stats.trend < 0 ? '↓' : '→'} {Math.abs(stats.trend).toFixed(2)}
+              {stats.trend > 0 ? '↑' : stats.trend < 0 ? '↓' : '→'} {Math.abs(safeParseFloat(stats.trend) || 0).toFixed(2)}
             </p>
           </div>
         </div>
