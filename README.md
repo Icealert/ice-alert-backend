@@ -10,6 +10,7 @@ Frontend application for the Ice Alert system, built with React and Vite.
 - Axios
 - Chart.js
 - React Router DOM
+- Supabase (Backend & Database)
 
 ## Development
 
@@ -33,27 +34,32 @@ npm run build
 Create a `.env.development` or `.env.production` file with:
 
 ```env
-VITE_API_URL=your_backend_url
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
+
+## Architecture
+
+The application uses:
+- Vercel for frontend hosting
+- Supabase for backend services:
+  - PostgreSQL Database
+  - Real-time updates
+  - Authentication
+  - API endpoints
 
 ## Deployment
 
 The application is automatically deployed when changes are pushed to the main branch:
 
 - Frontend (Vercel): Automatically deploys via GitHub integration
-- Backend (Render): Automatically deploys via GitHub integration
+- Backend (Supabase): No deployment needed - changes are immediate via the Supabase dashboard
 
 ### Manual Deployment
 
-You can trigger deployments manually using the deploy hooks:
+You can trigger frontend deployments manually using the Vercel deploy hook:
 
-- Frontend (Vercel):
 ```bash
 curl -X POST https://api.vercel.com/v1/integrations/deploy/prj_nYMQ56pMnhe5Jjqk5SJ1gwg3zqqt/XSiRJUcB39
-```
-
-- Backend (Render):
-```bash
-curl -X POST https://api.render.com/deploy/srv-ctemqopu0jms739dmjq0?key=C97EUaWtUaQ
 ```
   
