@@ -1,14 +1,18 @@
-// Get the API URL from environment variables
-const API_BASE_URL = '/api';
+import { createClient } from '@supabase/supabase-js';
+
+// Get Supabase configuration from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Create Supabase client
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Log the API configuration
 console.log('API Configuration:', {
-  baseUrl: API_BASE_URL,
+  supabaseUrl,
   environment: import.meta.env.MODE,
   timestamp: new Date().toISOString()
 });
-
-export default API_BASE_URL;
 
 // Export additional configuration
 export const API_CONFIG = {
@@ -20,7 +24,7 @@ export const API_CONFIG = {
 
 // Log the complete configuration
 console.log('Complete API Configuration:', {
-  baseUrl: API_BASE_URL,
+  supabaseUrl,
   config: API_CONFIG,
   environment: import.meta.env.MODE,
   timestamp: new Date().toISOString()

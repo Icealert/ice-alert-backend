@@ -17,8 +17,21 @@ const ChartComponent = ({
   
   // Ensure data is an array and not null
   const safeData = Array.isArray(data) ? data : [];
-  const lastDataPoint = safeData[safeData.length - 1];
-  const lastValue = lastDataPoint ? lastDataPoint[metric] : null;
+  const lastDataPoint = safeData[safeData.length - 1] || {};
+  const lastValue = lastDataPoint[metric];
+
+  // Helper function to safely parse numbers
+  const safeParseFloat = (value) => {
+    if (value === null || value === undefined) return null;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? null : parsed;
+  };
+
+  // Helper function to format value
+  const formatValue = (value) => {
+    if (value === null || value === undefined) return 'N/A';
+    return value.toFixed(1);
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-6">
@@ -49,10 +62,10 @@ const ChartComponent = ({
           <div className={`text-2xl font-bold ${
             lastValue && isInRange(lastValue) ? 'text-gray-900' : 'text-red-600'
           }`}>
-            {lastValue?.toFixed(1) || 'N/A'}{unit}
+            {formatValue(lastValue)}{unit}
           </div>
           <div className="text-sm text-gray-500">
-            {lastDataPoint ? new Date(lastDataPoint.timestamp).toLocaleTimeString() : 'No data'}
+            {lastDataPoint?.timestamp ? new Date(lastDataPoint.timestamp).toLocaleTimeString() : 'No data'}
           </div>
         </div>
 
@@ -61,15 +74,15 @@ const ChartComponent = ({
           <div className="text-gray-600 text-xs mb-1">Range</div>
           <div className="flex items-end gap-2">
             <span className={`text-sm ${
-              stats.min && isInRange(parseFloat(stats.min)) ? 'text-blue-600' : 'text-red-600'
+              stats.min && isInRange(safeParseFloat(stats.min)) ? 'text-blue-600' : 'text-red-600'
             }`}>
-              Min: {stats.min || 'N/A'}{unit}
+              Min: {formatValue(stats.min)}{unit}
             </span>
             <span className="text-gray-400 mx-1">|</span>
             <span className={`text-sm ${
-              stats.max && isInRange(parseFloat(stats.max)) ? 'text-blue-600' : 'text-red-600'
+              stats.max && isInRange(safeParseFloat(stats.max)) ? 'text-blue-600' : 'text-red-600'
             }`}>
-              Max: {stats.max || 'N/A'}{unit}
+              Max: {formatValue(stats.max)}{unit}
             </span>
           </div>
         </div>
@@ -92,14 +105,18 @@ const ChartComponent = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Median</span>
               <span className={`font-medium ${
-                stats.median && isInRange(parseFloat(stats.median)) ? 'text-gray-900' : 'text-red-600'
+                stats.median && isInRange(safeParseFloat(stats.median)) ? 'text-gray-900' : 'text-red-600'
               }`}>
-                {stats.median || 'N/A'}{unit}
+                {formatValue(stats.median)}{unit}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Std Dev</span>
-              <span className="font-medium">{stats.stdDev || 'N/A'}{unit}</span>
+              <span className="text-gray-600">Average</span>
+              <span className={`font-medium ${
+                stats.average && isInRange(safeParseFloat(stats.average)) ? 'text-gray-900' : 'text-red-600'
+              }`}>
+                {formatValue(stats.average)}{unit}
+              </span>
             </div>
           </div>
         </div>
@@ -108,133 +125,34 @@ const ChartComponent = ({
       {/* Chart */}
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart 
-            data={safeData} 
-            margin={{ top: 10, right: 10, left: 10, bottom: 12 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" className="opacity-50" />
+          <AreaChart data={safeData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={`gradient-${metric}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
+                <stop offset="95%" stopColor={color} stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="timestamp" 
-              tickFormatter={(timestamp) => {
-                const date = new Date(timestamp);
-                return date.toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit'
-                });
-              }}
-              interval="preserveStartEnd"
-              tick={{ fontSize: 12, fill: '#4B5563' }}
-              tickLine={{ stroke: '#9CA3AF' }}
-              axisLine={{ stroke: '#9CA3AF' }}
-              minTickGap={30}
-              height={35}
+              tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()}
             />
-            <YAxis 
-              tickFormatter={(value) => `${value}${unit}`}
-              tick={{ fontSize: 12, fill: '#4B5563' }}
-              tickLine={{ stroke: '#9CA3AF' }}
-              axisLine={{ stroke: '#9CA3AF' }}
-              domain={[
-                (dataMin) => Math.floor(Math.min(normalRange.min * 0.95, dataMin || 0)),
-                (dataMax) => Math.ceil(Math.max(normalRange.max * 1.05, dataMax || 0))
-              ]}
-              width={65}
+            <YAxis domain={['auto', 'auto']} />
+            <Tooltip
+              labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
+              formatter={(value) => [formatValue(value) + unit, metric]}
             />
-            {/* Normal range area */}
+            <ReferenceLine y={normalRange.min} stroke="#666" strokeDasharray="3 3" />
+            <ReferenceLine y={normalRange.max} stroke="#666" strokeDasharray="3 3" />
             <Area
-              y1={normalRange.min}
-              y2={normalRange.max}
-              fill="#4ade8033"
-              strokeWidth={0}
+              type="monotone"
+              dataKey={metric}
+              stroke={color}
+              fillOpacity={1}
+              fill={`url(#gradient-${metric})`}
             />
-            {/* Reference lines */}
-            <ReferenceLine
-              y={normalRange.min}
-              stroke="#4ade80"
-              strokeDasharray="3 3"
-            />
-            <ReferenceLine
-              y={normalRange.max}
-              stroke="#4ade80"
-              strokeDasharray="3 3"
-            />
-            <Tooltip 
-              labelFormatter={(label) => {
-                const date = new Date(label);
-                return date.toLocaleString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                });
-              }}
-              formatter={(value) => [
-                `${value?.toFixed(2) || 'N/A'}${unit} ${value && isInRange(value) ? '✓' : '⚠️'}`,
-                title
-              ]}
-              contentStyle={{ 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: 'none',
-                borderRadius: '8px',
-                boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-              }}
-              cursor={{ stroke: '#9CA3AF', strokeWidth: 1 }}
-            />
-            <Area 
-              type="monotone" 
-              dataKey={metric} 
-              stroke={color} 
-              fill={`${color}33`}
-              strokeWidth={2}
-              dot={{
-                r: 3,
-                fill: 'white',
-                stroke: color,
-                strokeWidth: 2
-              }}
-              activeDot={{
-                r: 5,
-                fill: color,
-                stroke: 'white',
-                strokeWidth: 2
-              }}
-            />
-            {/* Anomaly dots */}
-            {safeData
-              .map((item, i) => ({
-                ...item,
-                isAnomaly: item[metric] && !isInRange(item[metric])
-              }))
-              .filter(item => item.isAnomaly)
-              .map((item, i) => (
-                <ReferenceDot
-                  key={i}
-                  x={item.timestamp}
-                  y={item[metric]}
-                  r={4}
-                  fill="red"
-                  stroke="white"
-                  strokeWidth={1}
-                />
-              ))
-            }
           </AreaChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Chart Legend */}
-      <div className="flex items-center justify-center gap-6 mt-2 text-sm text-gray-600">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
-          <span>Actual Value</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-          <span>Out of Range</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-0.5 bg-green-500"></div>
-          <span>Normal Range ({normalRange.min}-{normalRange.max}{unit})</span>
-        </div>
       </div>
     </div>
   );
