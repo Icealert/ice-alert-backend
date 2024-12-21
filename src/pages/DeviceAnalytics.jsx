@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { fetchDeviceByIceAlertId, fetchDeviceReadings, updateDeviceSettings } from '../api/deviceService';
 import ChartComponent from '../components/DeviceAnalytics/ChartComponent';
 import QuickStats from '../components/DeviceAnalytics/QuickStats';
@@ -8,7 +8,6 @@ import { NORMAL_RANGES, DEFAULT_ALERT_SETTINGS } from '../components/DeviceAnaly
 
 const DeviceAnalytics = () => {
   const { icealertId } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
   const [deviceDetails, setDeviceDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -64,25 +63,44 @@ const DeviceAnalytics = () => {
       try {
         setLoading(true);
         setError(null);
+        console.log('Fetching device details for:', icealertId);
         const device = await fetchDeviceByIceAlertId(icealertId);
         
         if (!device) {
-          throw new Error('Device not found');
+          throw new Error(`Device not found: ${icealertId}`);
         }
 
+        console.log('Device details received:', device);
         setDeviceDetails(device);
+        
+        // Initialize settings form with device data and safe defaults
         setSettingsForm(prev => ({
           ...prev,
           name: device.name || '',
           location: device.location || '',
           partNumber: device.part_number || '',
           serialNumber: device.serial_number || '',
-          normalRanges: device.settings?.normalRanges || { ...NORMAL_RANGES },
-          alertThresholds: device.settings?.alertThresholds || {
+          normalRanges: {
+            temperature: {
+              min: device.settings?.normalRanges?.temperature?.min ?? NORMAL_RANGES.temperature.min,
+              max: device.settings?.normalRanges?.temperature?.max ?? NORMAL_RANGES.temperature.max
+            },
+            humidity: {
+              min: device.settings?.normalRanges?.humidity?.min ?? NORMAL_RANGES.humidity.min,
+              max: device.settings?.normalRanges?.humidity?.max ?? NORMAL_RANGES.humidity.max
+            },
             flowRate: {
-              warning: NORMAL_RANGES.flowRate.warningTimeThreshold,
-              critical: NORMAL_RANGES.flowRate.criticalTimeThreshold,
-              noFlowDuration: 30
+              min: device.settings?.normalRanges?.flowRate?.min ?? NORMAL_RANGES.flowRate.min,
+              max: device.settings?.normalRanges?.flowRate?.max ?? NORMAL_RANGES.flowRate.max,
+              warningTimeThreshold: device.settings?.normalRanges?.flowRate?.warningTimeThreshold ?? NORMAL_RANGES.flowRate.warningTimeThreshold,
+              criticalTimeThreshold: device.settings?.normalRanges?.flowRate?.criticalTimeThreshold ?? NORMAL_RANGES.flowRate.criticalTimeThreshold
+            }
+          },
+          alertThresholds: {
+            flowRate: {
+              warning: device.settings?.alertThresholds?.flowRate?.warning ?? NORMAL_RANGES.flowRate.warningTimeThreshold,
+              critical: device.settings?.alertThresholds?.flowRate?.critical ?? NORMAL_RANGES.flowRate.criticalTimeThreshold,
+              noFlowDuration: device.settings?.alertThresholds?.flowRate?.noFlowDuration ?? 30
             }
           },
           alerts: device.settings?.alerts || DEFAULT_ALERT_SETTINGS
@@ -90,6 +108,7 @@ const DeviceAnalytics = () => {
       } catch (err) {
         console.error('Error fetching device details:', err);
         setError(err.message);
+        setDeviceDetails(null);
       } finally {
         setLoading(false);
       }
@@ -105,11 +124,13 @@ const DeviceAnalytics = () => {
 
       try {
         setError(null);
+        console.log('Fetching historical data for:', deviceDetails.icealert_id);
         const readings = await fetchDeviceReadings(deviceDetails.icealert_id, timeRanges.temperature);
+        console.log('Historical data received:', readings?.length || 0, 'readings');
         setHistoricalData(readings || []);
       } catch (err) {
         console.error('Error fetching historical data:', err);
-        setError(err.message);
+        setHistoricalData([]);
       }
     };
 

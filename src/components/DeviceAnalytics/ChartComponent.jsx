@@ -24,7 +24,7 @@ const formatValue = (value, unit) => {
 };
 
 const ChartComponent = ({
-  data,
+  data = [],
   metric,
   title,
   color,
@@ -36,21 +36,23 @@ const ChartComponent = ({
     trend: 0,
     normalRange: { min: 0, max: 100 }
   },
-  isInRange,
-  timeRange,
-  onTimeRangeChange
+  isInRange = () => true,
+  timeRange = '24h',
+  onTimeRangeChange = () => {}
 }) => {
   // Ensure data is an array and contains valid entries
-  const safeData = Array.isArray(data) ? data.filter(item => item && item[metric] !== null) : [];
+  const safeData = Array.isArray(data) ? data.filter(item => {
+    return item && typeof item === 'object' && metric in item && item[metric] !== null;
+  }) : [];
   
   // Get the last data point safely
-  const lastDataPoint = safeData[safeData.length - 1];
+  const lastDataPoint = safeData.length > 0 ? safeData[safeData.length - 1] : null;
   const lastValue = lastDataPoint ? safeParseFloat(lastDataPoint[metric]) : null;
 
-  // Get normal range values safely
+  // Get normal range values safely with strict defaults
   const normalRange = stats?.normalRange || { min: 0, max: 100 };
-  const minValue = safeParseFloat(normalRange.min) ?? 0;
-  const maxValue = safeParseFloat(normalRange.max) ?? 100;
+  const minValue = safeParseFloat(normalRange?.min) ?? 0;
+  const maxValue = safeParseFloat(normalRange?.max) ?? 100;
 
   // Format the timestamp for display
   const formatTimestamp = (timestamp) => {
@@ -80,18 +82,26 @@ const ChartComponent = ({
     );
   };
 
-  // Calculate Y-axis domain
+  // Calculate Y-axis domain with safe defaults
   const calculateDomain = () => {
     if (!safeData.length) return [0, 100];
     
-    const values = safeData.map(item => safeParseFloat(item[metric])).filter(Boolean);
+    const values = safeData
+      .map(item => safeParseFloat(item[metric]))
+      .filter(val => val !== null);
+      
     if (!values.length) return [0, 100];
     
-    const min = Math.min(...values, minValue);
-    const max = Math.max(...values, maxValue);
-    const padding = (max - min) * 0.1;
+    const dataMin = Math.min(...values);
+    const dataMax = Math.max(...values);
+    const min = Math.min(dataMin, minValue);
+    const max = Math.max(dataMax, maxValue);
+    const padding = Math.max((max - min) * 0.1, 1);
     
-    return [Math.max(0, min - padding), max + padding];
+    return [
+      Math.max(0, min - padding),
+      max + padding
+    ];
   };
 
   return (

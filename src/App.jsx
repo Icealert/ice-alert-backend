@@ -5,7 +5,7 @@ import './index.css'
 
 const router = createBrowserRouter([
   {
-    path: "/device/:icealertId",
+    path: "/devices/by-icealert/:icealertId",
     element: <DeviceAnalytics />,
     future: {
       v7_startTransition: true,
@@ -25,7 +25,9 @@ const router = createBrowserRouter([
 
 const App = () => {
   return (
-    <RouterProvider router={router} />
+    <div className="min-h-screen bg-gray-100">
+      <RouterProvider router={router} />
+    </div>
   );
 }
 
